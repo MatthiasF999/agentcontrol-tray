@@ -1,14 +1,34 @@
 import { useAuth } from "../auth/AuthContext";
+import { usePairingStatus } from "../bridge/usePairingStatus";
+
+function statusColor(state: string): string {
+  if (state === "paired") return "#22c55e";
+  if (state === "claimed") return "#eab308";
+  return "#ef4444";
+}
 
 export function HomeScreen() {
   const { session, supabaseUrl, signOut } = useAuth();
+  const { status, error } = usePairingStatus();
+
+  const color =
+    error !== null ? "#ef4444" : statusColor(status?.state ?? "unpaired");
+  const label =
+    error !== null
+      ? "Bridge unreachable"
+      : status?.state === "paired"
+      ? "Bridge paired and running"
+      : status?.state === "claimed"
+      ? "Bridge claim pending"
+      : "Bridge unpaired";
+
   return (
     <main className="container">
       <header className="brand">
         <h1>AgentControl</h1>
         <div className="status-row">
-          <span className="status-dot" style={{ backgroundColor: "#22c55e" }} />
-          <span className="status-text">Signed in</span>
+          <span className="status-dot" style={{ backgroundColor: color }} />
+          <span className="status-text">{label}</span>
         </div>
       </header>
 
@@ -21,19 +41,26 @@ export function HomeScreen() {
           <dd>
             <code className="endpoint">{supabaseUrl}</code>
           </dd>
-          <dt>User ID</dt>
-          <dd>
-            <code className="endpoint">{session?.user.id ?? "—"}</code>
-          </dd>
+          {status?.state === "paired" && (
+            <>
+              <dt>Bridge ID</dt>
+              <dd>
+                <code className="endpoint">{status.bridgeId}</code>
+              </dd>
+              <dt>Org ID</dt>
+              <dd>
+                <code className="endpoint">{status.orgId}</code>
+              </dd>
+            </>
+          )}
         </dl>
       </section>
 
       <section className="card">
-        <h2>Phase 27.1 done</h2>
+        <h2>Coming next</h2>
         <p>
-          Login flow lands. Bridge-pairing (27.2), tray-status (27.3),
-          settings (27.4), notifications (27.5), container-control (27.6),
-          auto-update (27.7) follow.
+          Settings (27.4), recent tasks + approval notifications (27.5),
+          container control (27.6), auto-update + multi-bridge (27.7).
         </p>
       </section>
 

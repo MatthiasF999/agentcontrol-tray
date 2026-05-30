@@ -3,9 +3,34 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { ConfigScreen } from "./auth/ConfigScreen";
 import { LoginScreen } from "./auth/LoginScreen";
 import { HomeScreen } from "./screens/HomeScreen";
+import { PairScreen } from "./screens/PairScreen";
 import { registerDeepLinkAuth } from "./auth/deepLinkHandler";
 import { getSupabase } from "./lib/supabase";
+import {
+  BridgeClientProvider,
+  useBridge,
+} from "./bridge/BridgeClientContext";
+import { usePairingStatus } from "./bridge/usePairingStatus";
 import "./App.css";
+
+function SignedInRouter() {
+  // Inside BridgeClientProvider so we can poll bridge pair-status to decide
+  // PairScreen vs HomeScreen. Keep loading + error states distinct from the
+  // unauthenticated branches above.
+  useBridge();
+  const { status, loading, error } = usePairingStatus();
+
+  if (loading) {
+    return (
+      <main className="container narrow center">
+        <p className="muted">Checking bridge…</p>
+      </main>
+    );
+  }
+  if (error !== null && status === null) return <PairScreen />;
+  if (status === null || status.state !== "paired") return <PairScreen />;
+  return <HomeScreen />;
+}
 
 function Router() {
   const { status } = useAuth();
@@ -29,13 +54,15 @@ function Router() {
   }
   if (status === "needs-config") return <ConfigScreen />;
   if (status === "signed-out") return <LoginScreen />;
-  return <HomeScreen />;
+  return <SignedInRouter />;
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <Router />
+      <BridgeClientProvider>
+        <Router />
+      </BridgeClientProvider>
     </AuthProvider>
   );
 }
