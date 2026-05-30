@@ -10,9 +10,9 @@ const TRAY_ID: &str = "agentcontrol-main";
 
 fn icon_for(state: &str) -> Image<'static> {
     match state {
-        "running" => include_image!("../icons/status-green-32.png"),
-        "claimed" | "stopped" => include_image!("../icons/status-yellow-32.png"),
-        _ => include_image!("../icons/status-red-32.png"),
+        "running" => include_image!("icons/status-green-32.png"),
+        "claimed" | "stopped" => include_image!("icons/status-yellow-32.png"),
+        _ => include_image!("icons/status-red-32.png"),
     }
 }
 
@@ -65,7 +65,7 @@ pub fn run() {
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
             let _tray = TrayIconBuilder::with_id(TRAY_ID)
-                .icon(include_image!("../icons/status-red-32.png"))
+                .icon(include_image!("icons/status-red-32.png"))
                 .tooltip("AgentControl — Bridge not paired")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
