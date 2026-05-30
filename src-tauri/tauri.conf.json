@@ -43,6 +43,12 @@
       "desktop": {
         "schemes": ["agentcontrol-tray"]
       }
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/agentcontrol/agentcontrol-tray/releases/latest/download/latest.json"
+      ],
+      "pubkey": "REPLACE_WITH_TAURI_SIGNER_PUBKEY_PHASE_27_7_OPERATOR_ACTION"
     }
   }
 }

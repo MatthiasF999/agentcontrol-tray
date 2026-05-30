@@ -8,6 +8,8 @@ import {
 import { useBridge } from "../bridge/BridgeClientContext";
 import { usePairingStatus } from "../bridge/usePairingStatus";
 import { useEffect, useState } from "react";
+import { UpdaterCard } from "./UpdaterCard";
+import { BridgesListCard } from "./BridgesListCard";
 
 interface Props {
   onBack: () => void;
@@ -173,6 +175,12 @@ export function SettingsScreen({ onBack }: Props) {
           </p>
         )}
       </section>
+
+      <BridgesListCard
+        currentBridgeId={status?.state === "paired" ? status.bridgeId : null}
+      />
+
+      <UpdaterCard />
 
       <details className="card">
         <summary>Defaults reference</summary>
