@@ -122,6 +122,28 @@ export function SettingsScreen({ onBack }: Props) {
               <option value="beta">Beta</option>
             </select>
           </label>
+          <label>
+            <span>Compose project directory</span>
+            <input
+              type="text"
+              placeholder="/home/you/projects/supabase"
+              value={values.composeDir ?? ""}
+              onChange={(e) =>
+                void update("composeDir", e.target.value.trim() === "" ? null : e.target.value.trim())
+              }
+            />
+          </label>
+          <label>
+            <span>Compose profile</span>
+            <input
+              type="text"
+              placeholder="bridge"
+              value={values.composeProfile}
+              onChange={(e) =>
+                void update("composeProfile", e.target.value.trim() || "bridge")
+              }
+            />
+          </label>
           <button
             type="button"
             className="link"

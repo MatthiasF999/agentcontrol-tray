@@ -9,6 +9,8 @@ export interface AppSettings {
   pollIntervalSeconds: number;
   updateChannel: UpdateChannel;
   bridgeApiKey: string | null;
+  composeDir: string | null;
+  composeProfile: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -16,6 +18,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pollIntervalSeconds: 4,
   updateChannel: "stable",
   bridgeApiKey: null,
+  composeDir: null,
+  composeProfile: "bridge",
 };
 
 const KEY = "app.settings.v1";

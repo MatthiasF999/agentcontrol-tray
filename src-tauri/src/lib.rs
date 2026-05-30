@@ -1,3 +1,5 @@
+mod docker;
+
 use tauri::{
     image::Image,
     include_image,
@@ -103,7 +105,12 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![show_main_window, update_tray_status])
+        .invoke_handler(tauri::generate_handler![
+            show_main_window,
+            update_tray_status,
+            docker::docker_available,
+            docker::docker_compose,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

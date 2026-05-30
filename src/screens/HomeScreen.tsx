@@ -1,6 +1,7 @@
 import { useAuth } from "../auth/AuthContext";
 import { usePairingStatus } from "../bridge/usePairingStatus";
 import { RecentTasksCard } from "./RecentTasksCard";
+import { ContainerControlCard } from "./ContainerControlCard";
 
 interface Props {
   onOpenSettings: () => void;
@@ -74,6 +75,8 @@ export function HomeScreen({ onOpenSettings }: Props) {
       </section>
 
       {orgId !== null && <RecentTasksCard orgId={orgId} />}
+
+      <ContainerControlCard />
 
       <button type="button" onClick={() => void signOut()}>
         Sign out
