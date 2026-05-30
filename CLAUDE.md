@@ -26,6 +26,24 @@ Rust shell. Analog to Tailscale's daemon-host tray.
   `show_main_window` Rust command. Closing the window hides it
   (`prevent_close`), doesn't quit. Quit only via tray-menu "Quit".
 
+## Tooling + scripts
+
+- **pnpm** is the package manager (not npm). `pnpm install` after clone.
+- **dev**: `pnpm tauri dev` — vite + tauri together.
+- **build**: `pnpm tauri build` — produces unsigned binaries (AppImage /
+  .deb on Linux, .app / .dmg on macOS, .exe / .msi on Windows).
+- **typecheck (frontend)**: `pnpm tsc --noEmit` — runs as part of
+  `pnpm build` (which is `tsc && vite build`).
+- **Rust check**: `cd src-tauri && cargo check` for the Rust side; full
+  build via `cargo build --release` (or via `pnpm tauri build`).
+- **No test runner wired yet** (Phase 27/28 spike — tests deferred).
+  Treat `pnpm tsc --noEmit` + `cargo check` as the smoke gate.
+- **No linter / formatter** beyond the Tauri-default `cargo fmt` on the
+  Rust side. The TS side has no biome / eslint config yet.
+
+See `README.md` for the system-deps list (Linux needs
+`libwebkit2gtk-4.1-dev` + friends) and the cross-platform build matrix.
+
 ## Constraints (carry-over from main AgentControl project)
 
 - No Apple Developer / Google Play accounts required (local-deploy only)
