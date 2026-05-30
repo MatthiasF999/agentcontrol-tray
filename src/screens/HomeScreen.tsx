@@ -9,7 +9,7 @@ interface Props {
 
 function statusColor(state: string): string {
   if (state === "paired") return "#22c55e";
-  if (state === "claimed") return "#eab308";
+  if (state === "unpaired") return "#eab308";
   return "#ef4444";
 }
 
@@ -18,15 +18,15 @@ export function HomeScreen({ onOpenSettings }: Props) {
   const { status, error } = usePairingStatus();
 
   const color =
-    error !== null ? "#ef4444" : statusColor(status?.state ?? "unpaired");
+    error !== null ? "#ef4444" : statusColor(status?.state ?? "expired");
   const label =
     error !== null
       ? "Bridge unreachable"
       : status?.state === "paired"
       ? "Bridge paired and running"
-      : status?.state === "claimed"
-      ? "Bridge claim pending"
-      : "Bridge unpaired";
+      : status?.state === "unpaired"
+      ? "Bridge claim active — pair to continue"
+      : "Bridge claim expired";
   const orgId = status?.state === "paired" ? status.orgId : null;
 
   return (

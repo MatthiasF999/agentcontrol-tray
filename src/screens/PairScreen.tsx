@@ -3,6 +3,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useBridge } from "../bridge/BridgeClientContext";
 import { usePairingStatus } from "../bridge/usePairingStatus";
 import { BridgeError } from "../bridge/bridgeClient";
+import { QuickPair } from "./QuickPair";
 
 export function PairScreen() {
   const { supabaseUrl, signOut } = useAuth();
@@ -61,11 +62,13 @@ export function PairScreen() {
         )}
       </header>
 
-      <section className="card">
-        <h2>Manual pairing</h2>
+      <QuickPair />
+
+      <details className="card">
+        <summary>Manual pairing (advanced)</summary>
         <p className="muted">
-          Mint a bridge token in Supabase (operator flow), then paste here.
-          Quick-pair UI ships in 27.2 cross-repo follow-up.
+          Paste a bridge token minted via supabase operator flow. Use
+          quick-pair above when possible.
         </p>
         <form className="form" onSubmit={onSubmit}>
           <label>
@@ -107,7 +110,7 @@ export function PairScreen() {
               : "Pair this bridge"}
           </button>
         </form>
-      </section>
+      </details>
 
       <button type="button" className="link" onClick={() => void signOut()}>
         Sign out

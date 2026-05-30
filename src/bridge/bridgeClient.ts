@@ -8,8 +8,8 @@ export interface BridgeHealth {
 }
 
 export type BridgePairingState =
-  | { state: "unpaired"; claimUrl: string }
-  | { state: "claimed"; claimCode: string; expiresAt: string }
+  | { state: "unpaired"; code: string; expiresAt: string; pairUrl: string }
+  | { state: "expired" }
   | { state: "paired"; bridgeId: string; orgId: string };
 
 export interface BridgeAutonomousStatus {

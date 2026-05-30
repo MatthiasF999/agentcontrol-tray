@@ -26,15 +26,15 @@ function deriveStatus(
       tooltip: `AgentControl — Paired (${pairing.bridgeId.slice(0, 8)}…)`,
     };
   }
-  if (pairing.state === "claimed") {
+  if (pairing.state === "unpaired") {
     return {
       state: "claimed",
-      tooltip: "AgentControl — Pairing in progress",
+      tooltip: "AgentControl — Claim active, awaiting pair",
     };
   }
   return {
     state: "unpaired",
-    tooltip: "AgentControl — Bridge not paired",
+    tooltip: "AgentControl — Bridge claim expired",
   };
 }
 
