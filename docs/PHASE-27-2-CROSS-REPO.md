@@ -1,5 +1,11 @@
 # Phase 27.2 — Cross-repo deltas needed for end-to-end pairing
 
+> **2026-05-31 update**: Delta A shipped as bridge commit `41405c5` in
+> Phase 28.1. Delta B was reconsidered and skipped — the existing
+> `pair_bridge` RPC from supabase migration 0003 already covers the
+> quick-pair flow. See `docs/PHASE-28-SUMMARY.md` for the full
+> reconciliation including body-shape corrections.
+
 The tray-side of 27.2 ships complete: PairScreen, BridgeClient HTTP wrapper,
 pair-status polling hook, post-login routing that gates HomeScreen on the
 bridge's `paired` state. Two backend deltas land it end-to-end.
