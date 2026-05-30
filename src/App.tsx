@@ -11,6 +11,7 @@ import {
   useBridge,
 } from "./bridge/BridgeClientContext";
 import { usePairingStatus } from "./bridge/usePairingStatus";
+import { useTraySync } from "./bridge/useTraySync";
 import "./App.css";
 
 function SignedInRouter() {
@@ -19,6 +20,7 @@ function SignedInRouter() {
   // unauthenticated branches above.
   useBridge();
   const { status, loading, error } = usePairingStatus();
+  useTraySync(status, error);
 
   if (loading) {
     return (

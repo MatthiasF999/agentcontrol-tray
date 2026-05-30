@@ -1,8 +1,20 @@
 use tauri::{
+    image::Image,
+    include_image,
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
     Manager, WindowEvent,
 };
+
+const TRAY_ID: &str = "agentcontrol-main";
+
+fn icon_for(state: &str) -> Image<'static> {
+    match state {
+        "running" => include_image!("../icons/status-green-32.png"),
+        "claimed" | "stopped" => include_image!("../icons/status-yellow-32.png"),
+        _ => include_image!("../icons/status-red-32.png"),
+    }
+}
 
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
@@ -10,6 +22,20 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
         win.show().map_err(|e| e.to_string())?;
         win.set_focus().map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+#[tauri::command]
+fn update_tray_status(
+    app: tauri::AppHandle,
+    state: String,
+    tooltip: String,
+) -> Result<(), String> {
+    let tray = app
+        .tray_by_id(TRAY_ID)
+        .ok_or_else(|| "tray not found".to_string())?;
+    tray.set_icon(Some(icon_for(&state))).map_err(|e| e.to_string())?;
+    tray.set_tooltip(Some(tooltip)).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -38,8 +64,8 @@ pub fn run() {
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
-            let _tray = TrayIconBuilder::with_id("agentcontrol-main")
-                .icon(app.default_window_icon().unwrap().clone())
+            let _tray = TrayIconBuilder::with_id(TRAY_ID)
+                .icon(include_image!("../icons/status-red-32.png"))
                 .tooltip("AgentControl — Bridge not paired")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
@@ -77,7 +103,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![show_main_window])
+        .invoke_handler(tauri::generate_handler![show_main_window, update_tray_status])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
