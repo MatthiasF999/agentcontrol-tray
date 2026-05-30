@@ -1,45 +1,41 @@
-import { useState } from "react";
+import { useEffect, useRef } from "react";
+import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { ConfigScreen } from "./auth/ConfigScreen";
+import { LoginScreen } from "./auth/LoginScreen";
+import { HomeScreen } from "./screens/HomeScreen";
+import { registerDeepLinkAuth } from "./auth/deepLinkHandler";
+import { getSupabase } from "./lib/supabase";
 import "./App.css";
 
-type Status = "unpaired" | "stopped" | "running";
+function Router() {
+  const { status } = useAuth();
+  const unsubRef = useRef<(() => void) | null>(null);
 
-function statusColor(s: Status): string {
-  if (s === "running") return "#22c55e";
-  if (s === "stopped") return "#eab308";
-  return "#ef4444";
+  useEffect(() => {
+    void (async () => {
+      unsubRef.current = await registerDeepLinkAuth(() => getSupabase());
+    })();
+    return () => {
+      unsubRef.current?.();
+    };
+  }, []);
+
+  if (status === "loading") {
+    return (
+      <main className="container narrow center">
+        <p className="muted">Loading…</p>
+      </main>
+    );
+  }
+  if (status === "needs-config") return <ConfigScreen />;
+  if (status === "signed-out") return <LoginScreen />;
+  return <HomeScreen />;
 }
 
-function statusLabel(s: Status): string {
-  if (s === "running") return "Bridge connected";
-  if (s === "stopped") return "Bridge paired but not running";
-  return "Bridge not paired";
-}
-
-function App() {
-  const [status] = useState<Status>("unpaired");
-
+export default function App() {
   return (
-    <main className="container">
-      <header className="brand">
-        <h1>AgentControl</h1>
-        <div className="status-row">
-          <span
-            className="status-dot"
-            style={{ backgroundColor: statusColor(status) }}
-            aria-label={statusLabel(status)}
-          />
-          <span className="status-text">{statusLabel(status)}</span>
-        </div>
-      </header>
-
-      <section className="placeholder">
-        <p>Phase 27.0 spike — tray + window shell only.</p>
-        <p className="muted">
-          Login, pairing, and settings UIs land in 27.1–27.4.
-        </p>
-      </section>
-    </main>
+    <AuthProvider>
+      <Router />
+    </AuthProvider>
   );
 }
-
-export default App;

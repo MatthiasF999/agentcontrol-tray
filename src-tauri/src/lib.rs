@@ -15,8 +15,24 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+        }));
+    }
+
+    builder
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             let show_item = MenuItem::with_id(app, "show", "Open AgentControl", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
