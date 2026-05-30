@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { useBridge } from "../bridge/BridgeClientContext";
+import { useAuth } from "../auth/AuthContext";
 import { useRecentTasks, type AutonomousTask } from "../bridge/useRecentTasks";
-import { BridgeError } from "../bridge/bridgeClient";
 
 interface Props {
   orgId: string;
@@ -27,22 +26,45 @@ function formatWhen(iso: string): string {
 }
 
 function TaskRow({ task }: { task: AutonomousTask }) {
-  const bridge = useBridge();
+  const { client, session } = useAuth();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const badge = statusBadge(task.status);
 
   async function approve(): Promise<void> {
+    if (client === null || session === null) {
+      setErr("Not signed in.");
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
-      await bridge.approveTask(task.id);
-    } catch (e) {
-      if (e instanceof BridgeError && e.status === 404) {
-        setErr("Bridge POST /autonomous/approve/{taskId} route not implemented");
-      } else {
-        setErr(e instanceof Error ? e.message : String(e));
+      // Direct PostgREST update — RLS policy `autonomous_tasks_owner_update`
+      // gates this to org members, and the column-level RLS trigger
+      // (migration 0035) blocks bridge JWTs from touching approved_at /
+      // approved_by but allows end-user (`bridge_principal` unset) updates.
+      // The bridge's waitForApproval poller will see approved_at non-null
+      // on its next tick and resume execution.
+      const { error: e, count } = await client
+        .from("autonomous_tasks")
+        .update(
+          {
+            approved_at: new Date().toISOString(),
+            approved_by: session.user.id,
+          },
+          { count: "exact" },
+        )
+        .eq("id", task.id)
+        .eq("status", "awaiting_approval");
+      if (e !== null) {
+        setErr(e.message);
+        return;
       }
+      if ((count ?? 0) === 0) {
+        setErr("Task no longer awaiting approval.");
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }

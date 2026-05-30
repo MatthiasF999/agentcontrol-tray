@@ -19,15 +19,15 @@ export interface BridgeAutonomousStatus {
 }
 
 export interface BridgeAcceptRequest {
-  bridge_id: string;
-  refresh_token: string;
-  supabase_url: string;
+  refreshToken: string;
+  bridgeId: string;
+  orgId: string;
 }
 
 export interface BridgeAcceptResponse {
   paired: true;
-  bridge_id: string;
-  org_id: string;
+  bridgeId: string;
+  orgId: string;
 }
 
 export class BridgeError extends Error {
@@ -76,10 +76,6 @@ export class BridgeClient {
   async acceptPairing(req: BridgeAcceptRequest): Promise<BridgeAcceptResponse> {
     const res = await this.request("POST", "/pair/accept", req);
     return (await res.json()) as BridgeAcceptResponse;
-  }
-
-  async approveTask(taskId: string): Promise<void> {
-    await this.request("POST", `/autonomous/approve/${encodeURIComponent(taskId)}`, {});
   }
 
   private async request(

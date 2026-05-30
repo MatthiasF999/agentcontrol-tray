@@ -9,6 +9,7 @@ export function PairScreen() {
   const bridge = useBridge();
   const { status, error: pollError, refresh } = usePairingStatus();
   const [bridgeId, setBridgeId] = useState("");
+  const [orgId, setOrgId] = useState("");
   const [refreshToken, setRefreshToken] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -20,16 +21,21 @@ export function PairScreen() {
     setBusy(true);
     try {
       await bridge.acceptPairing({
-        bridge_id: bridgeId.trim(),
-        refresh_token: refreshToken.trim(),
-        supabase_url: supabaseUrl,
+        bridgeId: bridgeId.trim(),
+        orgId: orgId.trim(),
+        refreshToken: refreshToken.trim(),
       });
       await refresh();
     } catch (e) {
       if (e instanceof BridgeError && e.status === 404) {
         setSubmitError(
           "Bridge does not implement POST /pair/accept yet. " +
-            "See docs/PHASE-27-2-CROSS-REPO.md for the additive route spec.",
+            "Update bridge to >= phase-28.1 to enable tray pairing.",
+        );
+      } else if (e instanceof BridgeError && e.status === 409) {
+        setSubmitError(
+          "Bridge is already paired. Reset bridge token (delete " +
+            "data/bridge-token.json) to re-pair, or sign out here.",
         );
       } else {
         setSubmitError(e instanceof Error ? e.message : String(e));
@@ -69,6 +75,16 @@ export function PairScreen() {
               placeholder="01HXYZ…"
               value={bridgeId}
               onChange={(e) => setBridgeId(e.target.value)}
+              required
+            />
+          </label>
+          <label>
+            <span>Org ID</span>
+            <input
+              type="text"
+              placeholder="01HABC…"
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
               required
             />
           </label>
