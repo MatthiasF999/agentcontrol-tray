@@ -1,5 +1,6 @@
 import { useAuth } from "../auth/AuthContext";
 import { usePairingStatus } from "../bridge/usePairingStatus";
+import { RecentTasksCard } from "./RecentTasksCard";
 
 interface Props {
   onOpenSettings: () => void;
@@ -25,6 +26,7 @@ export function HomeScreen({ onOpenSettings }: Props) {
       : status?.state === "claimed"
       ? "Bridge claim pending"
       : "Bridge unpaired";
+  const orgId = status?.state === "paired" ? status.orgId : null;
 
   return (
     <main className="container">
@@ -71,13 +73,7 @@ export function HomeScreen({ onOpenSettings }: Props) {
         </dl>
       </section>
 
-      <section className="card">
-        <h2>Coming next</h2>
-        <p>
-          Recent tasks + approval notifications (27.5), container control
-          (27.6), auto-update + multi-bridge (27.7).
-        </p>
-      </section>
+      {orgId !== null && <RecentTasksCard orgId={orgId} />}
 
       <button type="button" onClick={() => void signOut()}>
         Sign out
