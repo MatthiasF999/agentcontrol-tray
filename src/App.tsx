@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { ConfigScreen } from "./auth/ConfigScreen";
 import { LoginScreen } from "./auth/LoginScreen";
 import { HomeScreen } from "./screens/HomeScreen";
 import { PairScreen } from "./screens/PairScreen";
+import { SettingsScreen } from "./screens/SettingsScreen";
 import { registerDeepLinkAuth } from "./auth/deepLinkHandler";
 import { getSupabase } from "./lib/supabase";
 import {
@@ -14,12 +15,12 @@ import { usePairingStatus } from "./bridge/usePairingStatus";
 import { useTraySync } from "./bridge/useTraySync";
 import "./App.css";
 
+type View = "home" | "settings";
+
 function SignedInRouter() {
-  // Inside BridgeClientProvider so we can poll bridge pair-status to decide
-  // PairScreen vs HomeScreen. Keep loading + error states distinct from the
-  // unauthenticated branches above.
   useBridge();
   const { status, loading, error } = usePairingStatus();
+  const [view, setView] = useState<View>("home");
   useTraySync(status, error);
 
   if (loading) {
@@ -29,9 +30,15 @@ function SignedInRouter() {
       </main>
     );
   }
+
+  // Settings is always accessible to signed-in users — even pre-pair.
+  if (view === "settings") {
+    return <SettingsScreen onBack={() => setView("home")} />;
+  }
+
   if (error !== null && status === null) return <PairScreen />;
   if (status === null || status.state !== "paired") return <PairScreen />;
-  return <HomeScreen />;
+  return <HomeScreen onOpenSettings={() => setView("settings")} />;
 }
 
 function Router() {

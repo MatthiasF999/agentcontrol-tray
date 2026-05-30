@@ -1,13 +1,17 @@
 import { useAuth } from "../auth/AuthContext";
 import { usePairingStatus } from "../bridge/usePairingStatus";
 
+interface Props {
+  onOpenSettings: () => void;
+}
+
 function statusColor(state: string): string {
   if (state === "paired") return "#22c55e";
   if (state === "claimed") return "#eab308";
   return "#ef4444";
 }
 
-export function HomeScreen() {
+export function HomeScreen({ onOpenSettings }: Props) {
   const { session, supabaseUrl, signOut } = useAuth();
   const { status, error } = usePairingStatus();
 
@@ -25,7 +29,18 @@ export function HomeScreen() {
   return (
     <main className="container">
       <header className="brand">
-        <h1>AgentControl</h1>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <h1>AgentControl</h1>
+          <button type="button" onClick={onOpenSettings}>
+            Settings
+          </button>
+        </div>
         <div className="status-row">
           <span className="status-dot" style={{ backgroundColor: color }} />
           <span className="status-text">{label}</span>
@@ -59,8 +74,8 @@ export function HomeScreen() {
       <section className="card">
         <h2>Coming next</h2>
         <p>
-          Settings (27.4), recent tasks + approval notifications (27.5),
-          container control (27.6), auto-update + multi-bridge (27.7).
+          Recent tasks + approval notifications (27.5), container control
+          (27.6), auto-update + multi-bridge (27.7).
         </p>
       </section>
 
