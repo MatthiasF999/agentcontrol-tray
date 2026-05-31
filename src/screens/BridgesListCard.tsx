@@ -1,14 +1,14 @@
-import { useBridgesList } from "../bridge/useBridgesList";
+import { useBridgesList } from '../bridge/useBridgesList';
 
 interface Props {
   currentBridgeId: string | null;
 }
 
 function relativeSeen(iso: string | null): string {
-  if (iso === null) return "never";
+  if (iso === null) return 'never';
   const diff = Date.now() - new Date(iso).getTime();
   const min = Math.floor(diff / 60000);
-  if (min < 1) return "just now";
+  if (min < 1) return 'just now';
   if (min < 60) return `${min}m ago`;
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h ago`;
@@ -33,11 +33,11 @@ export function BridgesListCard({ currentBridgeId }: Props) {
           {bridges.map((b) => (
             <li className="task-row" key={b.id}>
               <div className="task-row-head">
-                <span>{b.name ?? "(unnamed)"}</span>
+                <span>{b.name ?? '(unnamed)'}</span>
                 {b.id === currentBridgeId && (
                   <span
                     className="badge"
-                    style={{ backgroundColor: "#dcfce7", color: "#14532d" }}
+                    style={{ backgroundColor: '#dcfce7', color: '#14532d' }}
                   >
                     this machine
                   </span>

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { useBridge } from "./BridgeClientContext";
-import type { BridgePairingState } from "./bridgeClient";
+import { useEffect, useState } from 'react';
+import { useBridge } from './BridgeClientContext';
+import type { BridgePairingState } from './bridgeClient';
 
 interface PairingHook {
   status: BridgePairingState | null;

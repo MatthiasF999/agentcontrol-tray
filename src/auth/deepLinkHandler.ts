@@ -1,13 +1,13 @@
-import { onOpenUrl, getCurrent } from "@tauri-apps/plugin-deep-link";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 
 function parseHashFragment(input: string): Record<string, string> {
   const out: Record<string, string> = {};
-  const hashIndex = input.indexOf("#");
+  const hashIndex = input.indexOf('#');
   if (hashIndex === -1) return out;
   const frag = input.slice(hashIndex + 1);
-  for (const pair of frag.split("&")) {
-    const eq = pair.indexOf("=");
+  for (const pair of frag.split('&')) {
+    const eq = pair.indexOf('=');
     if (eq === -1) continue;
     out[decodeURIComponent(pair.slice(0, eq))] = decodeURIComponent(
       pair.slice(eq + 1),
@@ -23,10 +23,13 @@ async function handle(
   const client = await resolveClient();
   if (client === null) return;
   const params = parseHashFragment(url);
-  const access = params["access_token"] ?? null;
-  const refresh = params["refresh_token"] ?? null;
+  const access = params['access_token'] ?? null;
+  const refresh = params['refresh_token'] ?? null;
   if (access === null || refresh === null) return;
-  await client.auth.setSession({ access_token: access, refresh_token: refresh });
+  await client.auth.setSession({
+    access_token: access,
+    refresh_token: refresh,
+  });
 }
 
 export async function registerDeepLinkAuth(

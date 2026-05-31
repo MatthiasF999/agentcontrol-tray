@@ -3,16 +3,16 @@
 // only call the `submit_idea` RPC and read these tables via PostgREST.
 
 export type BacklogItemState =
-  | "idea"
-  | "groomed"
-  | "scheduled"
-  | "in_progress"
-  | "done"
-  | "released"
-  | "blocked"
-  | "cancelled";
+  | 'idea'
+  | 'groomed'
+  | 'scheduled'
+  | 'in_progress'
+  | 'done'
+  | 'released'
+  | 'blocked'
+  | 'cancelled';
 
-export type BacklogPriority = "P0" | "P1" | "P2" | "P3";
+export type BacklogPriority = 'P0' | 'P1' | 'P2' | 'P3';
 
 export interface BacklogItem {
   id: string;
@@ -32,10 +32,10 @@ export interface BacklogItem {
 }
 
 export type BacklogReleaseState =
-  | "planning"
-  | "active"
-  | "released"
-  | "cancelled";
+  | 'planning'
+  | 'active'
+  | 'released'
+  | 'cancelled';
 
 export interface BacklogRelease {
   id: string;
@@ -51,11 +51,11 @@ export interface BacklogRelease {
 }
 
 export type StandupTaskState =
-  | "queued"
-  | "claimed"
-  | "generated"
-  | "delivered"
-  | "failed";
+  | 'queued'
+  | 'claimed'
+  | 'generated'
+  | 'delivered'
+  | 'failed';
 
 export interface StandupTask {
   id: string;
@@ -69,10 +69,10 @@ export interface StandupTask {
 }
 
 export const BACKLOG_ITEM_FIELDS =
-  "id, org_id, project_id, release_id, title, description, state, priority, size, blocked_reason, labels, submitted_by, created_at, updated_at";
+  'id, org_id, project_id, release_id, title, description, state, priority, size, blocked_reason, labels, submitted_by, created_at, updated_at';
 
 export const BACKLOG_RELEASE_FIELDS =
-  "id, org_id, project_id, name, semver, state, target_date, goal_markdown, released_at, created_at";
+  'id, org_id, project_id, name, semver, state, target_date, goal_markdown, released_at, created_at';
 
 export const STANDUP_TASK_FIELDS =
-  "id, org_id, project_id, state, digest_markdown, delivered_at, generated_at, created_at";
+  'id, org_id, project_id, state, digest_markdown, delivered_at, generated_at, created_at';

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { useEffect, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
 
 export interface ProjectLite {
   id: string;
@@ -31,11 +31,11 @@ export function useProjectsList(orgId: string | null): Hook {
     let cancelled = false;
     void (async () => {
       const { data, error: e } = await client
-        .from("projects")
-        .select("id, name, slug")
-        .eq("org_id", orgId)
-        .is("archived_at", null)
-        .order("name", { ascending: true });
+        .from('projects')
+        .select('id, name, slug')
+        .eq('org_id', orgId)
+        .is('archived_at', null)
+        .order('name', { ascending: true });
       if (cancelled) return;
       if (e !== null) setError(e.message);
       else if (data !== null) setProjects(data as ProjectLite[]);

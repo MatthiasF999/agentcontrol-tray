@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
-import { settings } from "./storage";
+import { useCallback, useEffect, useState } from 'react';
+import { settings } from './storage';
 
-export type Theme = "light" | "dark" | "system";
-export type UpdateChannel = "stable" | "beta";
+export type Theme = 'light' | 'dark' | 'system';
+export type UpdateChannel = 'stable' | 'beta';
 
 export interface AppSettings {
   theme: Theme;
@@ -14,15 +14,15 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: "system",
+  theme: 'system',
   pollIntervalSeconds: 4,
-  updateChannel: "stable",
+  updateChannel: 'stable',
   bridgeApiKey: null,
   composeDir: null,
-  composeProfile: "bridge",
+  composeProfile: 'bridge',
 };
 
-const KEY = "app.settings.v1";
+const KEY = 'app.settings.v1';
 
 export async function loadAppSettings(): Promise<AppSettings> {
   const stored = await settings.get<Partial<AppSettings>>(KEY);
@@ -37,7 +37,10 @@ export async function saveAppSettings(next: AppSettings): Promise<void> {
 export function useAppSettings(): {
   values: AppSettings;
   loading: boolean;
-  update: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>;
+  update: <K extends keyof AppSettings>(
+    key: K,
+    value: AppSettings[K],
+  ) => Promise<void>;
   reset: () => Promise<void>;
 } {
   const [values, setValues] = useState<AppSettings>(DEFAULT_SETTINGS);

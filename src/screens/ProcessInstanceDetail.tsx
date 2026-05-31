@@ -1,16 +1,16 @@
-import { useState } from "react";
-import { useAuth } from "../auth/AuthContext";
-import { advanceInstance } from "../process/advanceInstance";
-import { useProcessInstanceDetail } from "../process/useProcessInstanceDetail";
+import { useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { advanceInstance } from '../process/advanceInstance';
 import {
   canOperatorAdvance,
   type ProcessArtifactRow,
   type ProcessInstanceRow,
   type ProcessPhase,
   type ProcessPhaseStatus,
-} from "../process/types";
-import { ArtifactViewer } from "./ArtifactViewer";
-import { ArtifactViewerFullscreen } from "./ArtifactViewerFullscreen";
+} from '../process/types';
+import { useProcessInstanceDetail } from '../process/useProcessInstanceDetail';
+import { ArtifactViewer } from './ArtifactViewer';
+import { ArtifactViewerFullscreen } from './ArtifactViewerFullscreen';
 
 interface Props {
   instanceId: string;
@@ -18,10 +18,10 @@ interface Props {
 }
 
 function phaseStatusColor(status: ProcessPhaseStatus): string {
-  if (status === "done") return "#22c55e";
-  if (status === "active") return "#3b82f6";
-  if (status === "awaiting_review") return "#eab308";
-  return "#a1a1aa";
+  if (status === 'done') return '#22c55e';
+  if (status === 'active') return '#3b82f6';
+  if (status === 'awaiting_review') return '#eab308';
+  return '#a1a1aa';
 }
 
 function classifyPhase(
@@ -30,12 +30,12 @@ function classifyPhase(
   currentStatus: ProcessPhaseStatus,
 ): { label: string; color: string } {
   if (phase.index < currentIndex) {
-    return { label: "done", color: "#22c55e" };
+    return { label: 'done', color: '#22c55e' };
   }
   if (phase.index === currentIndex) {
     return { label: currentStatus, color: phaseStatusColor(currentStatus) };
   }
-  return { label: "upcoming", color: "#d4d4d8" };
+  return { label: 'upcoming', color: '#d4d4d8' };
 }
 
 function PhaseTimeline({ instance }: { instance: ProcessInstanceRow }) {
@@ -161,10 +161,10 @@ export function ProcessInstanceDetail({ instanceId, onBack }: Props) {
         </button>
         <h1>{instance.title}</h1>
         <p className="muted">
-          template v{instance.template_version} · phase{" "}
-          {instance.current_phase_index + 1}/{phases.length} ·{" "}
+          template v{instance.template_version} · phase{' '}
+          {instance.current_phase_index + 1}/{phases.length} ·{' '}
           {instance.current_phase_status}
-          {instance.completed_at !== null && " · completed"}
+          {instance.completed_at !== null && ' · completed'}
         </p>
       </header>
 
@@ -177,11 +177,12 @@ export function ProcessInstanceDetail({ instanceId, onBack }: Props) {
         <section className="card">
           <h2>Current phase — {currentPhase.title}</h2>
           <p className="muted">
-            {currentPhase.kind} · advance-requires {currentPhase.advance_requires}
+            {currentPhase.kind} · advance-requires{' '}
+            {currentPhase.advance_requires}
           </p>
           {currentPhase.guidance_markdown !== undefined &&
             currentPhase.guidance_markdown !== null && (
-              <p style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>
+              <p style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>
                 {currentPhase.guidance_markdown}
               </p>
             )}
@@ -199,10 +200,10 @@ export function ProcessInstanceDetail({ instanceId, onBack }: Props) {
               style={{ marginTop: 12 }}
             >
               {advancing
-                ? "Advancing…"
+                ? 'Advancing…'
                 : instance.current_phase_index === phases.length - 1
-                  ? "Mark last phase done"
-                  : "Advance to next phase"}
+                  ? 'Mark last phase done'
+                  : 'Advance to next phase'}
             </button>
           ) : (
             <p className="muted" style={{ marginTop: 12 }}>
@@ -237,10 +238,12 @@ export function ProcessInstanceDetail({ instanceId, onBack }: Props) {
           <ul className="phase-runs">
             {phaseRuns.map((r) => (
               <li key={r.id}>
-                <code>{r.transition}</code> on phase{" "}
-                <strong>{phases[r.phase_index]?.title ?? `#${r.phase_index}`}</strong>
+                <code>{r.transition}</code> on phase{' '}
+                <strong>
+                  {phases[r.phase_index]?.title ?? `#${r.phase_index}`}
+                </strong>
                 <span className="muted">
-                  {" "}
+                  {' '}
                   · {new Date(r.at).toLocaleString()}
                 </span>
                 {r.note !== null && <div className="muted">{r.note}</div>}

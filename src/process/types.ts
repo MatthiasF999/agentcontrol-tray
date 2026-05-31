@@ -9,13 +9,13 @@
 // for now we duplicate so the tray can ship without waiting for the cross-repo
 // protocol drop.
 
-export type ProcessPhaseKind = "human-only" | "claude-doable" | "hybrid";
+export type ProcessPhaseKind = 'human-only' | 'claude-doable' | 'hybrid';
 
 export type ProcessAdvanceRequires =
-  | "artifact_present"
-  | "operator_confirm"
-  | "autonomous_task_succeeded"
-  | "review_approved";
+  | 'artifact_present'
+  | 'operator_confirm'
+  | 'autonomous_task_succeeded'
+  | 'review_approved';
 
 export interface ProcessPhase {
   index: number;
@@ -29,10 +29,10 @@ export interface ProcessPhase {
 }
 
 export type ProcessPhaseStatus =
-  | "pending"
-  | "active"
-  | "awaiting_review"
-  | "done";
+  | 'pending'
+  | 'active'
+  | 'awaiting_review'
+  | 'done';
 
 export interface ProcessTemplateRow {
   id: string;
@@ -78,11 +78,11 @@ export interface ProcessArtifactRow {
 }
 
 export type ProcessPhaseTransition =
-  | "entered"
-  | "reviewed"
-  | "done"
-  | "reopened"
-  | "skipped";
+  | 'entered'
+  | 'reviewed'
+  | 'done'
+  | 'reopened'
+  | 'skipped';
 
 export interface ProcessPhaseRunRow {
   id: string;
@@ -124,26 +124,28 @@ export function instanceIsActive(instance: ProcessInstanceRow): boolean {
  * operator (no autonomous-task dependency). The detail screen surfaces an
  * Advance button only in this case.
  */
-export function canOperatorAdvance(
-  instance: ProcessInstanceRow,
-): { eligible: boolean; reason?: string } {
+export function canOperatorAdvance(instance: ProcessInstanceRow): {
+  eligible: boolean;
+  reason?: string;
+} {
   const phases = instance.template_version_snapshot;
   const phase = phases[instance.current_phase_index];
   if (phase === undefined) {
-    return { eligible: false, reason: "Phase index out of bounds." };
+    return { eligible: false, reason: 'Phase index out of bounds.' };
   }
   if (instance.completed_at !== null) {
-    return { eligible: false, reason: "Instance already completed." };
+    return { eligible: false, reason: 'Instance already completed.' };
   }
-  if (phase.kind !== "human-only") {
+  if (phase.kind !== 'human-only') {
     return {
       eligible: false,
-      reason: "Only human-only phases advance from the tray (others wait on Claude).",
+      reason:
+        'Only human-only phases advance from the tray (others wait on Claude).',
     };
   }
   if (
-    instance.current_phase_status !== "active" &&
-    instance.current_phase_status !== "pending"
+    instance.current_phase_status !== 'active' &&
+    instance.current_phase_status !== 'pending'
   ) {
     return {
       eligible: false,

@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from "react";
-import { useAuth } from "./AuthContext";
+import { type FormEvent, useState } from 'react';
+import { useAuth } from './AuthContext';
 
 export function ConfigScreen() {
   const { configure } = useAuth();
-  const [url, setUrl] = useState("");
-  const [anonKey, setAnonKey] = useState("");
+  const [url, setUrl] = useState('');
+  const [anonKey, setAnonKey] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -13,12 +13,12 @@ export function ConfigScreen() {
     setError(null);
     setBusy(true);
     try {
-      const trimmed = url.trim().replace(/\/$/, "");
+      const trimmed = url.trim().replace(/\/$/, '');
       if (!/^https?:\/\//.test(trimmed)) {
-        throw new Error("URL must start with http:// or https://");
+        throw new Error('URL must start with http:// or https://');
       }
       if (anonKey.trim().length < 20) {
-        throw new Error("Anon key looks too short");
+        throw new Error('Anon key looks too short');
       }
       await configure(trimmed, anonKey.trim());
     } catch (e) {
@@ -58,7 +58,7 @@ export function ConfigScreen() {
         </label>
         {error !== null && <div className="error">{error}</div>}
         <button type="submit" disabled={busy}>
-          {busy ? "Saving…" : "Continue"}
+          {busy ? 'Saving…' : 'Continue'}
         </button>
       </form>
     </main>

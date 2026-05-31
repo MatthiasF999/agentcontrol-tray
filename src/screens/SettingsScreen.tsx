@@ -1,15 +1,15 @@
-import { useAuth } from "../auth/AuthContext";
+import { useEffect, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { useBridge } from '../bridge/BridgeClientContext';
+import { usePairingStatus } from '../bridge/usePairingStatus';
 import {
   DEFAULT_SETTINGS,
-  useAppSettings,
   type Theme,
   type UpdateChannel,
-} from "../lib/appSettings";
-import { useBridge } from "../bridge/BridgeClientContext";
-import { usePairingStatus } from "../bridge/usePairingStatus";
-import { useEffect, useState } from "react";
-import { UpdaterCard } from "./UpdaterCard";
-import { BridgesListCard } from "./BridgesListCard";
+  useAppSettings,
+} from '../lib/appSettings';
+import { BridgesListCard } from './BridgesListCard';
+import { UpdaterCard } from './UpdaterCard';
 
 interface Props {
   onBack: () => void;
@@ -20,16 +20,18 @@ export function SettingsScreen({ onBack }: Props) {
   const { values, loading, update, reset } = useAppSettings();
   const bridge = useBridge();
   const { status } = usePairingStatus();
-  const [bridgeConfigError, setBridgeConfigError] = useState<string | null>(null);
+  const [bridgeConfigError, setBridgeConfigError] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     // Probe GET /config once on mount so we know whether to render the Bridge
     // config form or the cross-repo-pending placeholder.
     void (async () => {
       try {
-        const res = await fetch("http://localhost:3001/config", {
-          method: "GET",
-          headers: { Accept: "application/json" },
+        const res = await fetch('http://localhost:3001/config', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
         });
         if (!res.ok) {
           setBridgeConfigError(`GET /config → ${res.status}`);
@@ -61,7 +63,7 @@ export function SettingsScreen({ onBack }: Props) {
         <h2>Account</h2>
         <dl className="kv">
           <dt>Email</dt>
-          <dd>{session?.user.email ?? "—"}</dd>
+          <dd>{session?.user.email ?? '—'}</dd>
           <dt>Supabase</dt>
           <dd>
             <code className="endpoint">{supabaseUrl}</code>
@@ -88,9 +90,7 @@ export function SettingsScreen({ onBack }: Props) {
             <span>Theme</span>
             <select
               value={values.theme}
-              onChange={(e) =>
-                void update("theme", e.target.value as Theme)
-              }
+              onChange={(e) => void update('theme', e.target.value as Theme)}
             >
               <option value="system">System</option>
               <option value="light">Light</option>
@@ -106,8 +106,11 @@ export function SettingsScreen({ onBack }: Props) {
               value={values.pollIntervalSeconds}
               onChange={(e) =>
                 void update(
-                  "pollIntervalSeconds",
-                  Math.max(2, Math.min(30, Number.parseInt(e.target.value, 10) || 4)),
+                  'pollIntervalSeconds',
+                  Math.max(
+                    2,
+                    Math.min(30, Number.parseInt(e.target.value, 10) || 4),
+                  ),
                 )
               }
             />
@@ -117,7 +120,7 @@ export function SettingsScreen({ onBack }: Props) {
             <select
               value={values.updateChannel}
               onChange={(e) =>
-                void update("updateChannel", e.target.value as UpdateChannel)
+                void update('updateChannel', e.target.value as UpdateChannel)
               }
             >
               <option value="stable">Stable</option>
@@ -129,9 +132,12 @@ export function SettingsScreen({ onBack }: Props) {
             <input
               type="text"
               placeholder="/home/you/projects/supabase"
-              value={values.composeDir ?? ""}
+              value={values.composeDir ?? ''}
               onChange={(e) =>
-                void update("composeDir", e.target.value.trim() === "" ? null : e.target.value.trim())
+                void update(
+                  'composeDir',
+                  e.target.value.trim() === '' ? null : e.target.value.trim(),
+                )
               }
             />
           </label>
@@ -142,15 +148,11 @@ export function SettingsScreen({ onBack }: Props) {
               placeholder="bridge"
               value={values.composeProfile}
               onChange={(e) =>
-                void update("composeProfile", e.target.value.trim() || "bridge")
+                void update('composeProfile', e.target.value.trim() || 'bridge')
               }
             />
           </label>
-          <button
-            type="button"
-            className="link"
-            onClick={() => void reset()}
-          >
+          <button type="button" className="link" onClick={() => void reset()}>
             Reset app settings to defaults
           </button>
         </div>
@@ -158,26 +160,29 @@ export function SettingsScreen({ onBack }: Props) {
 
       <section className="card">
         <h2>Bridge configuration</h2>
-        {status?.state === "paired" ? (
+        {status?.state === 'paired' ? (
           bridgeConfigError !== null ? (
             <div className="error">
               Bridge does not expose <code>GET /config</code> yet (
-              {bridgeConfigError}). The route additions are documented
-              in <code>docs/PHASE-27-2-CROSS-REPO.md</code> (Delta A);
-              the config GET/PUT pair is a 27.4 follow-up beyond that.
+              {bridgeConfigError}). The route additions are documented in{' '}
+              <code>docs/PHASE-27-2-CROSS-REPO.md</code> (Delta A); the config
+              GET/PUT pair is a 27.4 follow-up beyond that.
             </div>
           ) : (
-            <p className="muted">Bridge config form lands once GET/PUT /config is wired.</p>
+            <p className="muted">
+              Bridge config form lands once GET/PUT /config is wired.
+            </p>
           )
         ) : (
           <p className="muted">
-            Pair this bridge first (Status: <code>{status?.state ?? "unknown"}</code>).
+            Pair this bridge first (Status:{' '}
+            <code>{status?.state ?? 'unknown'}</code>).
           </p>
         )}
       </section>
 
       <BridgesListCard
-        currentBridgeId={status?.state === "paired" ? status.bridgeId : null}
+        currentBridgeId={status?.state === 'paired' ? status.bridgeId : null}
       />
 
       <UpdaterCard />

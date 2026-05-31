@@ -1,6 +1,6 @@
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 
-const DEFAULT_HOST = "http://localhost:3001";
+const DEFAULT_HOST = 'http://localhost:3001';
 
 export interface BridgeHealth {
   ok: boolean;
@@ -8,9 +8,9 @@ export interface BridgeHealth {
 }
 
 export type BridgePairingState =
-  | { state: "unpaired"; code: string; expiresAt: string; pairUrl: string }
-  | { state: "expired" }
-  | { state: "paired"; bridgeId: string; orgId: string };
+  | { state: 'unpaired'; code: string; expiresAt: string; pairUrl: string }
+  | { state: 'expired' }
+  | { state: 'paired'; bridgeId: string; orgId: string };
 
 export interface BridgeAutonomousStatus {
   running_count: number;
@@ -37,7 +37,7 @@ export class BridgeError extends Error {
     public readonly body: string,
   ) {
     super(message);
-    this.name = "BridgeError";
+    this.name = 'BridgeError';
   }
 }
 
@@ -59,22 +59,22 @@ export class BridgeClient {
   }
 
   async health(): Promise<BridgeHealth> {
-    const res = await this.request("GET", "/health");
+    const res = await this.request('GET', '/health');
     return (await res.json()) as BridgeHealth;
   }
 
   async pairStatus(): Promise<BridgePairingState> {
-    const res = await this.request("GET", "/pair");
+    const res = await this.request('GET', '/pair');
     return (await res.json()) as BridgePairingState;
   }
 
   async autonomousStatus(): Promise<BridgeAutonomousStatus> {
-    const res = await this.request("GET", "/autonomous/status");
+    const res = await this.request('GET', '/autonomous/status');
     return (await res.json()) as BridgeAutonomousStatus;
   }
 
   async acceptPairing(req: BridgeAcceptRequest): Promise<BridgeAcceptResponse> {
-    const res = await this.request("POST", "/pair/accept", req);
+    const res = await this.request('POST', '/pair/accept', req);
     return (await res.json()) as BridgeAcceptResponse;
   }
 
@@ -83,9 +83,10 @@ export class BridgeClient {
     path: string,
     body?: unknown,
   ): Promise<Response> {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (this.apiKey !== null) headers["Authorization"] = `Bearer ${this.apiKey}`;
-    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (this.apiKey !== null)
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
 
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);

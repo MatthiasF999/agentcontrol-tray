@@ -1,9 +1,9 @@
-import { useAuth } from "../auth/AuthContext";
-import { usePairingStatus } from "../bridge/usePairingStatus";
-import { useStandupDigest } from "../backlog/useStandupDigest";
-import { RecentTasksCard } from "./RecentTasksCard";
-import { ContainerControlCard } from "./ContainerControlCard";
-import { BacklogQuickAddButton } from "./BacklogQuickAddButton";
+import { useAuth } from '../auth/AuthContext';
+import { useStandupDigest } from '../backlog/useStandupDigest';
+import { usePairingStatus } from '../bridge/usePairingStatus';
+import { BacklogQuickAddButton } from './BacklogQuickAddButton';
+import { ContainerControlCard } from './ContainerControlCard';
+import { RecentTasksCard } from './RecentTasksCard';
 
 interface Props {
   onOpenSettings: () => void;
@@ -12,9 +12,9 @@ interface Props {
 }
 
 function statusColor(state: string): string {
-  if (state === "paired") return "#22c55e";
-  if (state === "unpaired") return "#eab308";
-  return "#ef4444";
+  if (state === 'paired') return '#22c55e';
+  if (state === 'unpaired') return '#eab308';
+  return '#ef4444';
 }
 
 export function HomeScreen({
@@ -24,33 +24,33 @@ export function HomeScreen({
 }: Props) {
   const { session, supabaseUrl, signOut } = useAuth();
   const { status, error } = usePairingStatus();
-  const orgIdForDigest = status?.state === "paired" ? status.orgId : null;
+  const orgIdForDigest = status?.state === 'paired' ? status.orgId : null;
   const { latest: digest } = useStandupDigest(orgIdForDigest);
 
   const color =
-    error !== null ? "#ef4444" : statusColor(status?.state ?? "expired");
+    error !== null ? '#ef4444' : statusColor(status?.state ?? 'expired');
   const label =
     error !== null
-      ? "Bridge unreachable"
-      : status?.state === "paired"
-      ? "Bridge paired and running"
-      : status?.state === "unpaired"
-      ? "Bridge claim active — pair to continue"
-      : "Bridge claim expired";
-  const orgId = status?.state === "paired" ? status.orgId : null;
+      ? 'Bridge unreachable'
+      : status?.state === 'paired'
+        ? 'Bridge paired and running'
+        : status?.state === 'unpaired'
+          ? 'Bridge claim active — pair to continue'
+          : 'Bridge claim expired';
+  const orgId = status?.state === 'paired' ? status.orgId : null;
 
   return (
     <main className="container">
       <header className="brand">
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}
         >
           <h1>AgentControl</h1>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={() => onOpenBacklog(false)}>
               Backlog
             </button>
@@ -72,12 +72,12 @@ export function HomeScreen({
         <h2>Account</h2>
         <dl className="kv">
           <dt>Email</dt>
-          <dd>{session?.user.email ?? "—"}</dd>
+          <dd>{session?.user.email ?? '—'}</dd>
           <dt>Supabase</dt>
           <dd>
             <code className="endpoint">{supabaseUrl}</code>
           </dd>
-          {status?.state === "paired" && (
+          {status?.state === 'paired' && (
             <>
               <dt>Bridge ID</dt>
               <dd>

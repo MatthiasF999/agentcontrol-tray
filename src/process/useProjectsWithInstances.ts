@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { useAuth } from "../auth/AuthContext";
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
 import type {
   ProcessInstanceRow,
   ProjectRow,
   ProjectWithInstances,
-} from "./types";
+} from './types';
 
 interface Hook {
   groups: ProjectWithInstances[];
@@ -15,10 +15,10 @@ interface Hook {
 }
 
 const INSTANCE_FIELDS =
-  "id, template_id, template_version, template_version_snapshot, org_id, project_id, title, current_phase_index, current_phase_status, worktree_path, created_at, updated_at, completed_at";
+  'id, template_id, template_version, template_version_snapshot, org_id, project_id, title, current_phase_index, current_phase_status, worktree_path, created_at, updated_at, completed_at';
 
 const PROJECT_FIELDS =
-  "id, org_id, name, slug, description, default_template_id, archived_at, created_at";
+  'id, org_id, name, slug, description, default_template_id, archived_at, created_at';
 
 /**
  * Lists every active project in the org with its process_instances inline.
@@ -43,16 +43,16 @@ export function useProjectsWithInstances(orgId: string | null): Hook {
     }
     const [pj, inst] = await Promise.all([
       client
-        .from("projects")
+        .from('projects')
         .select(PROJECT_FIELDS)
-        .eq("org_id", orgId)
-        .is("archived_at", null)
-        .order("created_at", { ascending: false }),
+        .eq('org_id', orgId)
+        .is('archived_at', null)
+        .order('created_at', { ascending: false }),
       client
-        .from("process_instances")
+        .from('process_instances')
         .select(INSTANCE_FIELDS)
-        .eq("org_id", orgId)
-        .order("created_at", { ascending: false }),
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false }),
     ]);
     if (pj.error !== null) {
       setError(pj.error.message);
@@ -79,18 +79,18 @@ export function useProjectsWithInstances(orgId: string | null): Hook {
     const channel = client
       .channel(`process-instances-${orgId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "public",
-          table: "process_instances",
+          event: '*',
+          schema: 'public',
+          table: 'process_instances',
           filter: `org_id=eq.${orgId}`,
         },
         (payload) => {
           if (cancelled) return;
           const next = payload.new as ProcessInstanceRow | null;
           const old = payload.old as { id?: string } | null;
-          if (payload.eventType === "DELETE" && old?.id !== undefined) {
+          if (payload.eventType === 'DELETE' && old?.id !== undefined) {
             setInstances((prev) => prev.filter((i) => i.id !== old.id));
             return;
           }

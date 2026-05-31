@@ -15,6 +15,11 @@ when releases ship through the operator-portal.
 ## [Unreleased]
 
 ### Added
+- biome + line-limits enforcement (`scripts/check-line-limits.mjs` +
+  `biome.json`). New `pnpm lint` / `pnpm lint:fix` / `pnpm format`
+  scripts; `pnpm check` chains `pnpm lint && pnpm tsc --noEmit` as the
+  TS-side smoke gate. Pre-existing Phase 27/28/32/38 offenders are
+  recorded in `scripts/.line-limits-grandfather` and shrink over time.
 - Phase 38.8 — tray-side backlog UI (Quick-add FAB on HomeScreen +
   `BacklogConsumptionScreen` + `useStandupDigest` native notification
   on `backlog_standup_tasks` → 'delivered'). Tray stays consumption-only

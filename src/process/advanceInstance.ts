@@ -1,5 +1,5 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ProcessInstanceRow } from "./types";
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ProcessInstanceRow } from './types';
 
 /**
  * Operator-driven phase advance for human-only phases.
@@ -31,22 +31,22 @@ export async function advanceInstance(
 
   const now = new Date().toISOString();
   const patch: Partial<ProcessInstanceRow> & { updated_at?: string } = {
-    current_phase_status: isLastPhase ? "done" : "pending",
+    current_phase_status: isLastPhase ? 'done' : 'pending',
     current_phase_index: isLastPhase ? currentIndex : nextIndex,
     ...(isLastPhase ? { completed_at: now } : {}),
   };
 
   const { error: updErr } = await client
-    .from("process_instances")
+    .from('process_instances')
     .update(patch)
-    .eq("id", instance.id);
+    .eq('id', instance.id);
   if (updErr !== null) return { ok: false, error: updErr.message };
 
   const rows = [
     {
       instance_id: instance.id,
       phase_index: currentIndex,
-      transition: "done" as const,
+      transition: 'done' as const,
       actor: actorUserId,
     },
     ...(isLastPhase
@@ -55,13 +55,13 @@ export async function advanceInstance(
           {
             instance_id: instance.id,
             phase_index: nextIndex,
-            transition: "entered" as const,
+            transition: 'entered' as const,
             actor: actorUserId,
           },
         ]),
   ];
   const { error: runErr } = await client
-    .from("process_phase_runs")
+    .from('process_phase_runs')
     .insert(rows);
   if (runErr !== null) return { ok: false, error: runErr.message };
 

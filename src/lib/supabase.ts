@@ -1,15 +1,16 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { settings, supabaseStorageAdapter } from "./storage";
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { settings, supabaseStorageAdapter } from './storage';
 
-const URL_KEY = "supabase.url";
-const ANON_KEY_KEY = "supabase.anon_key";
+const URL_KEY = 'supabase.url';
+const ANON_KEY_KEY = 'supabase.anon_key';
 
 let _client: SupabaseClient | null = null;
 let _currentUrl: string | null = null;
 
-export async function getStoredSupabaseConfig(): Promise<
-  { url: string; anonKey: string } | null
-> {
+export async function getStoredSupabaseConfig(): Promise<{
+  url: string;
+  anonKey: string;
+} | null> {
   const url = await settings.get<string>(URL_KEY);
   const anonKey = await settings.get<string>(ANON_KEY_KEY);
   if (url === null || anonKey === null) return null;

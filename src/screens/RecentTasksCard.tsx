@@ -1,24 +1,24 @@
-import { useState } from "react";
-import { useAuth } from "../auth/AuthContext";
-import { useRecentTasks, type AutonomousTask } from "../bridge/useRecentTasks";
+import { useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { type AutonomousTask, useRecentTasks } from '../bridge/useRecentTasks';
 
 interface Props {
   orgId: string;
 }
 
 function statusBadge(status: string): { bg: string; fg: string } {
-  if (status === "executing") return { bg: "#dbeafe", fg: "#1e3a8a" };
-  if (status === "completed") return { bg: "#dcfce7", fg: "#14532d" };
-  if (status === "failed") return { bg: "#fee2e2", fg: "#991b1b" };
-  if (status === "awaiting_approval") return { bg: "#fef3c7", fg: "#78350f" };
-  return { bg: "#e4e4e7", fg: "#27272a" };
+  if (status === 'executing') return { bg: '#dbeafe', fg: '#1e3a8a' };
+  if (status === 'completed') return { bg: '#dcfce7', fg: '#14532d' };
+  if (status === 'failed') return { bg: '#fee2e2', fg: '#991b1b' };
+  if (status === 'awaiting_approval') return { bg: '#fef3c7', fg: '#78350f' };
+  return { bg: '#e4e4e7', fg: '#27272a' };
 }
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();
   const min = Math.floor(diff / 60000);
-  if (min < 1) return "just now";
+  if (min < 1) return 'just now';
   if (min < 60) return `${min}m ago`;
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h ago`;
@@ -33,7 +33,7 @@ function TaskRow({ task }: { task: AutonomousTask }) {
 
   async function approve(): Promise<void> {
     if (client === null || session === null) {
-      setErr("Not signed in.");
+      setErr('Not signed in.');
       return;
     }
     setBusy(true);
@@ -46,22 +46,22 @@ function TaskRow({ task }: { task: AutonomousTask }) {
       // The bridge's waitForApproval poller will see approved_at non-null
       // on its next tick and resume execution.
       const { error: e, count } = await client
-        .from("autonomous_tasks")
+        .from('autonomous_tasks')
         .update(
           {
             approved_at: new Date().toISOString(),
             approved_by: session.user.id,
           },
-          { count: "exact" },
+          { count: 'exact' },
         )
-        .eq("id", task.id)
-        .eq("status", "awaiting_approval");
+        .eq('id', task.id)
+        .eq('status', 'awaiting_approval');
       if (e !== null) {
         setErr(e.message);
         return;
       }
       if ((count ?? 0) === 0) {
-        setErr("Task no longer awaiting approval.");
+        setErr('Task no longer awaiting approval.');
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -84,12 +84,12 @@ function TaskRow({ task }: { task: AutonomousTask }) {
       <p className="task-prompt">
         {task.prompt !== null && task.prompt.length > 120
           ? `${task.prompt.slice(0, 117)}…`
-          : task.prompt ?? "(no prompt)"}
+          : (task.prompt ?? '(no prompt)')}
       </p>
-      {task.status === "awaiting_approval" && (
+      {task.status === 'awaiting_approval' && (
         <>
           <button type="button" onClick={() => void approve()} disabled={busy}>
-            {busy ? "Approving…" : "Approve"}
+            {busy ? 'Approving…' : 'Approve'}
           </button>
           {err !== null && <div className="error">{err}</div>}
         </>

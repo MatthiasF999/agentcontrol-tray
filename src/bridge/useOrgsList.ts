@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { useEffect, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
 
 export interface Org {
   id: string;
@@ -34,9 +34,9 @@ export function useOrgsList(): Hook {
     let cancelled = false;
     void (async () => {
       const { data, error: e } = await client
-        .from("org_members")
-        .select("role, org_id, organizations(id, name, slug)")
-        .eq("user_id", session.user.id);
+        .from('org_members')
+        .select('role, org_id, organizations(id, name, slug)')
+        .eq('user_id', session.user.id);
       if (cancelled) return;
       if (e !== null) {
         setError(e.message);

@@ -19,7 +19,7 @@ export function DigestModal({ markdown, onClose }: Props) {
     >
       <div
         className="modal-sheet"
-        style={{ maxHeight: "80vh", overflow: "auto" }}
+        style={{ maxHeight: '80vh', overflow: 'auto' }}
       >
         <div className="modal-head">
           <h2>Standup digest</h2>

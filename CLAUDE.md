@@ -37,9 +37,46 @@ Rust shell. Analog to Tailscale's daemon-host tray.
 - **Rust check**: `cd src-tauri && cargo check` for the Rust side; full
   build via `cargo build --release` (or via `pnpm tauri build`).
 - **No test runner wired yet** (Phase 27/28 spike — tests deferred).
-  Treat `pnpm tsc --noEmit` + `cargo check` as the smoke gate.
-- **No linter / formatter** beyond the Tauri-default `cargo fmt` on the
-  Rust side. The TS side has no biome / eslint config yet.
+  Treat `pnpm check` (= `pnpm lint && pnpm tsc --noEmit`) plus
+  `cargo check` as the smoke gate.
+- **Linter / formatter (TS side)**: Biome 2.4 (`biome.json`) +
+  `scripts/check-line-limits.mjs`. Run via `pnpm lint`; auto-fix safe
+  issues with `pnpm lint:fix`; format-only with `pnpm format`. Rust
+  side stays on `cargo fmt`.
+
+## Hard limits (enforced by `scripts/check-line-limits.mjs` — `pnpm lint` fails on violation)
+
+Biome has no line-count rule, so the limits live in
+`scripts/check-line-limits.mjs` (TypeScript-AST based), invoked by
+`pnpm lint`.
+
+- **Functions ≤ 50 lines** (non-blank). Hard — no exception.
+- **`src/components/**` + `src/hooks/**` ≤ 150 lines** (non-blank). A
+  single file may raise its ceiling up to 250 with one marker:
+  `// line-limit:250 -- reason: <why>`. Use sparingly.
+- **Everything else under `src/` ≤ 250 lines**. Over the limit → split
+  it, don't raise it.
+- **`src-tauri/` is skipped** — Rust side has its own discipline
+  (`cargo fmt` + `cargo check`).
+
+Pre-existing offenders (Phase 27/28/32/38 code that landed before the
+limits existed) are tracked in `scripts/.line-limits-grandfather`. New
+violations must be fixed at the source — the grandfather list shrinks,
+never grows.
+
+## Clean code (https://cln.co/) — the review rubric
+
+Every change is reviewed against CleanCode Principles. The ones that
+bite most here: **SRP** (one screen / hook, one reason to change),
+**SoC** (UI ≠ data-fetching ≠ Tauri-command glue), **DRY** (shared
+logic in `src/lib/` and `src/bridge/`), **KISS / YAGNI**, **LoD**,
+**DIP** (depend on `BridgeClient` / `SupabaseClient` interfaces, not
+their innards).
+
+## TypeScript
+
+- `strict: true`. **No `any`** (Biome `suspicious/noExplicitAny` is an
+  error). Use `unknown` + narrowing, or a real type.
 
 See `README.md` for the system-deps list (Linux needs
 `libwebkit2gtk-4.1-dev` + friends) and the cross-platform build matrix.

@@ -1,7 +1,7 @@
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { LazyStore } from '@tauri-apps/plugin-store';
 
-const SETTINGS_FILE = "settings.json";
-const SESSION_FILE = "session.json";
+const SETTINGS_FILE = 'settings.json';
+const SESSION_FILE = 'session.json';
 
 let _settings: LazyStore | null = null;
 let _session: LazyStore | null = null;

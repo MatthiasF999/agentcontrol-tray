@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
-import { BACKLOG_RELEASE_FIELDS, type BacklogRelease } from "./types";
+import { useEffect, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { BACKLOG_RELEASE_FIELDS, type BacklogRelease } from './types';
 
 interface Hook {
   releases: BacklogRelease[];
@@ -27,11 +27,11 @@ export function useBacklogReleases(orgId: string | null): Hook {
     let cancelled = false;
     void (async () => {
       const { data, error: e } = await client
-        .from("backlog_releases")
+        .from('backlog_releases')
         .select(BACKLOG_RELEASE_FIELDS)
-        .eq("org_id", orgId)
-        .order("state", { ascending: true })
-        .order("target_date", { ascending: true, nullsFirst: false });
+        .eq('org_id', orgId)
+        .order('state', { ascending: true })
+        .order('target_date', { ascending: true, nullsFirst: false });
       if (cancelled) return;
       if (e !== null) setError(e.message);
       else if (data !== null) setReleases(data as BacklogRelease[]);

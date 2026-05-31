@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { useAuth } from "../auth/AuthContext";
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
 import type {
   ProcessArtifactRow,
   ProcessInstanceRow,
   ProcessPhaseRunRow,
-} from "./types";
+} from './types';
 
 interface Hook {
   instance: ProcessInstanceRow | null;
@@ -17,11 +17,11 @@ interface Hook {
 }
 
 const INSTANCE_FIELDS =
-  "id, template_id, template_version, template_version_snapshot, org_id, project_id, title, current_phase_index, current_phase_status, worktree_path, created_at, updated_at, completed_at";
+  'id, template_id, template_version, template_version_snapshot, org_id, project_id, title, current_phase_index, current_phase_status, worktree_path, created_at, updated_at, completed_at';
 const ARTIFACT_FIELDS =
-  "id, instance_id, phase_index, artifact_type, data, worktree_path, published_url, published_at, published_expires_at, bridge_id, created_at, updated_at";
+  'id, instance_id, phase_index, artifact_type, data, worktree_path, published_url, published_at, published_expires_at, bridge_id, created_at, updated_at';
 const PHASE_RUN_FIELDS =
-  "id, instance_id, phase_index, transition, actor, autonomous_task_id, note, at";
+  'id, instance_id, phase_index, transition, actor, autonomous_task_id, note, at';
 
 /**
  * Loads a single instance + its artifacts + its phase-run history. Subscribes
@@ -47,20 +47,20 @@ export function useProcessInstanceDetail(instanceId: string | null): Hook {
     }
     const [inst, arts, runs] = await Promise.all([
       client
-        .from("process_instances")
+        .from('process_instances')
         .select(INSTANCE_FIELDS)
-        .eq("id", instanceId)
+        .eq('id', instanceId)
         .maybeSingle(),
       client
-        .from("process_artifacts")
+        .from('process_artifacts')
         .select(ARTIFACT_FIELDS)
-        .eq("instance_id", instanceId)
-        .order("created_at", { ascending: false }),
+        .eq('instance_id', instanceId)
+        .order('created_at', { ascending: false }),
       client
-        .from("process_phase_runs")
+        .from('process_phase_runs')
         .select(PHASE_RUN_FIELDS)
-        .eq("instance_id", instanceId)
-        .order("at", { ascending: true }),
+        .eq('instance_id', instanceId)
+        .order('at', { ascending: true }),
     ]);
     if (inst.error !== null) {
       setError(inst.error.message);
@@ -91,11 +91,11 @@ export function useProcessInstanceDetail(instanceId: string | null): Hook {
     const channel = client
       .channel(`process-instance-${instanceId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "public",
-          table: "process_instances",
+          event: '*',
+          schema: 'public',
+          table: 'process_instances',
           filter: `id=eq.${instanceId}`,
         },
         (payload) => {
@@ -105,18 +105,18 @@ export function useProcessInstanceDetail(instanceId: string | null): Hook {
         },
       )
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "public",
-          table: "process_artifacts",
+          event: '*',
+          schema: 'public',
+          table: 'process_artifacts',
           filter: `instance_id=eq.${instanceId}`,
         },
         (payload) => {
           if (cancelled) return;
           const next = payload.new as ProcessArtifactRow | null;
           const old = payload.old as { id?: string } | null;
-          if (payload.eventType === "DELETE" && old?.id !== undefined) {
+          if (payload.eventType === 'DELETE' && old?.id !== undefined) {
             setArtifacts((prev) => prev.filter((a) => a.id !== old.id));
             return;
           }
@@ -128,11 +128,11 @@ export function useProcessInstanceDetail(instanceId: string | null): Hook {
         },
       )
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "INSERT",
-          schema: "public",
-          table: "process_phase_runs",
+          event: 'INSERT',
+          schema: 'public',
+          table: 'process_phase_runs',
           filter: `instance_id=eq.${instanceId}`,
         },
         (payload) => {
@@ -154,5 +154,12 @@ export function useProcessInstanceDetail(instanceId: string | null): Hook {
     };
   }, [client, instanceId]);
 
-  return { instance, artifacts, phaseRuns, loading, error, refresh: loadInitial };
+  return {
+    instance,
+    artifacts,
+    phaseRuns,
+    loading,
+    error,
+    refresh: loadInitial,
+  };
 }

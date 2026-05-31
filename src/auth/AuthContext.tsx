@@ -1,13 +1,20 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Session, SupabaseClient } from "@supabase/supabase-js";
+import type { Session, SupabaseClient } from '@supabase/supabase-js';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   clearSupabaseConfig,
   getStoredSupabaseConfig,
   getSupabase,
   saveSupabaseConfig,
-} from "../lib/supabase";
+} from '../lib/supabase';
 
-type Status = "loading" | "needs-config" | "signed-out" | "signed-in";
+type Status = 'loading' | 'needs-config' | 'signed-out' | 'signed-in';
 
 interface AuthState {
   status: Status;
@@ -24,7 +31,7 @@ interface AuthState {
 const AuthCtx = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<Status>("loading");
+  const [status, setStatus] = useState<Status>('loading');
   const [session, setSessionState] = useState<Session | null>(null);
   const [client, setClient] = useState<SupabaseClient | null>(null);
   const [supabaseUrl, setUrl] = useState<string | null>(null);
@@ -33,26 +40,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void (async () => {
       const cfg = await getStoredSupabaseConfig();
       if (cfg === null) {
-        setStatus("needs-config");
+        setStatus('needs-config');
         return;
       }
       setUrl(cfg.url);
       const c = await getSupabase();
       if (c === null) {
-        setStatus("needs-config");
+        setStatus('needs-config');
         return;
       }
       setClient(c);
       const { data } = await c.auth.getSession();
       if (data.session !== null) {
         setSessionState(data.session);
-        setStatus("signed-in");
+        setStatus('signed-in');
       } else {
-        setStatus("signed-out");
+        setStatus('signed-out');
       }
       c.auth.onAuthStateChange((_event, newSession) => {
         setSessionState(newSession);
-        setStatus(newSession !== null ? "signed-in" : "signed-out");
+        setStatus(newSession !== null ? 'signed-in' : 'signed-out');
       });
     })();
   }, []);
@@ -68,10 +75,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUrl(url);
         const c = await getSupabase();
         setClient(c);
-        setStatus("signed-out");
+        setStatus('signed-out');
       },
       async signInWithMagicLink(email, redirectTo) {
-        if (client === null) throw new Error("Supabase client not configured");
+        if (client === null) throw new Error('Supabase client not configured');
         const { error } = await client.auth.signInWithOtp({
           email,
           options: { emailRedirectTo: redirectTo },
@@ -80,13 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       setSession(newSession) {
         setSessionState(newSession);
-        setStatus("signed-in");
+        setStatus('signed-in');
       },
       async signOut() {
         if (client === null) return;
         await client.auth.signOut();
         setSessionState(null);
-        setStatus("signed-out");
+        setStatus('signed-out');
       },
       async resetConfig() {
         if (client !== null) await client.auth.signOut();
@@ -94,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setClient(null);
         setUrl(null);
         setSessionState(null);
-        setStatus("needs-config");
+        setStatus('needs-config');
       },
     }),
     [status, session, supabaseUrl, client],
@@ -105,6 +112,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth(): AuthState {
   const ctx = useContext(AuthCtx);
-  if (ctx === null) throw new Error("useAuth must be used within AuthProvider");
+  if (ctx === null) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }

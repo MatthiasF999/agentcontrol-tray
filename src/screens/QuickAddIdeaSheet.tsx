@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useAuth } from "../auth/AuthContext";
-import { useProjectsList } from "../backlog/useProjectsList";
+import { useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { useProjectsList } from '../backlog/useProjectsList';
 
 interface Props {
   orgId: string;
@@ -8,41 +8,41 @@ interface Props {
   onSubmitted: (title: string) => void;
 }
 
-type SubmitState = "idle" | "submitting" | "error";
+type SubmitState = 'idle' | 'submitting' | 'error';
 
 export function QuickAddIdeaSheet({ orgId, onClose, onSubmitted }: Props) {
   const { client } = useAuth();
   const { projects } = useProjectsList(orgId);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [projectId, setProjectId] = useState<string>("");
-  const [state, setState] = useState<SubmitState>("idle");
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [projectId, setProjectId] = useState<string>('');
+  const [state, setState] = useState<SubmitState>('idle');
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     if (client === null) {
-      setErrMsg("Not signed in.");
-      setState("error");
+      setErrMsg('Not signed in.');
+      setState('error');
       return;
     }
     const trimmed = title.trim();
     if (trimmed.length === 0) {
-      setErrMsg("Title is required.");
-      setState("error");
+      setErrMsg('Title is required.');
+      setState('error');
       return;
     }
-    setState("submitting");
+    setState('submitting');
     setErrMsg(null);
-    const { error } = await client.rpc("submit_idea", {
+    const { error } = await client.rpc('submit_idea', {
       p_org_id: orgId,
-      p_project_id: projectId === "" ? null : projectId,
+      p_project_id: projectId === '' ? null : projectId,
       p_title: trimmed,
-      p_description: description.trim() === "" ? null : description.trim(),
+      p_description: description.trim() === '' ? null : description.trim(),
     });
     if (error !== null) {
       setErrMsg(error.message);
-      setState("error");
+      setState('error');
       return;
     }
     onSubmitted(trimmed);
@@ -102,8 +102,8 @@ export function QuickAddIdeaSheet({ orgId, onClose, onSubmitted }: Props) {
           </select>
         </label>
         {errMsg !== null && <div className="error">{errMsg}</div>}
-        <button type="submit" disabled={state === "submitting"}>
-          {state === "submitting" ? "Submitting…" : "Submit idea"}
+        <button type="submit" disabled={state === 'submitting'}>
+          {state === 'submitting' ? 'Submitting…' : 'Submit idea'}
         </button>
       </form>
     </div>

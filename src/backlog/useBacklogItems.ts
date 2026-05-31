@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { useAuth } from "../auth/AuthContext";
-import { BACKLOG_ITEM_FIELDS, type BacklogItem } from "./types";
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { BACKLOG_ITEM_FIELDS, type BacklogItem } from './types';
 
 interface Hook {
   items: BacklogItem[];
@@ -21,7 +21,7 @@ function applyChange(
   oldId: string | undefined,
   event: string,
 ): BacklogItem[] {
-  if (event === "DELETE" && oldId !== undefined) {
+  if (event === 'DELETE' && oldId !== undefined) {
     return prev.filter((i) => i.id !== oldId);
   }
   if (next === null) return prev;
@@ -46,11 +46,11 @@ export function useBacklogItems(orgId: string | null): Hook {
 
     void (async () => {
       const { data, error: e } = await client
-        .from("backlog_items")
+        .from('backlog_items')
         .select(BACKLOG_ITEM_FIELDS)
-        .eq("org_id", orgId)
-        .order("priority", { ascending: true })
-        .order("created_at", { ascending: false })
+        .eq('org_id', orgId)
+        .order('priority', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(PAGE_SIZE);
       if (cancelled) return;
       if (e !== null) setError(e.message);
@@ -61,11 +61,11 @@ export function useBacklogItems(orgId: string | null): Hook {
     const channel = client
       .channel(`backlog-items-${orgId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "public",
-          table: "backlog_items",
+          event: '*',
+          schema: 'public',
+          table: 'backlog_items',
           filter: `org_id=eq.${orgId}`,
         },
         (payload) => {

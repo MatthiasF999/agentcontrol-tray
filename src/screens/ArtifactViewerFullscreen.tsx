@@ -1,6 +1,6 @@
-import { useEffect } from "react";
-import type { ProcessArtifactRow, ProcessInstanceRow } from "../process/types";
-import { ArtifactViewer } from "./ArtifactViewer";
+import { useEffect } from 'react';
+import type { ProcessArtifactRow, ProcessInstanceRow } from '../process/types';
+import { ArtifactViewer } from './ArtifactViewer';
 
 interface Props {
   artifact: ProcessArtifactRow;
@@ -13,13 +13,17 @@ interface Props {
  * Designed for usability tests where the operator demos a prototype to a
  * stakeholder on the bridge host.
  */
-export function ArtifactViewerFullscreen({ artifact, instance, onClose }: Props) {
+export function ArtifactViewerFullscreen({
+  artifact,
+  instance,
+  onClose,
+}: Props) {
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
-      if (e.key === "Escape") onClose();
+      if (e.key === 'Escape') onClose();
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
   return (

@@ -1,0 +1,50 @@
+# Pre-existing line-limit offenders captured at the introduction of
+# scripts/check-line-limits.mjs (Wave 2 — cln.co cascade, 2026-05-31).
+# One entry per line: `<relative-path>` (file-level) or
+# `<relative-path>:<line>` (function-level, line = ts-AST start of the
+# function token, matching what the script reports).
+#
+# These are NOT a permission to grow further — any new violation must be
+# fixed at the source. Entries here should shrink over time; when you
+# touch one of these files, slim the function below 50 non-blank lines
+# and delete the matching row.
+#
+# Reason: tray Phase 27/28 spike + Phase 32/38 UI landed before the
+# limits existed. Splitting them now is out-of-scope for this iter
+# (chore/cln-cascade is enforcement-only, no refactor).
+
+# auth/ — login + config + auth-context shells (effects + jsx mixed)
+src/auth/AuthContext.tsx:33
+src/auth/ConfigScreen.tsx:4
+src/auth/LoginScreen.tsx:6
+
+# backlog/ — supabase channel subscribe + reducer hooks
+src/backlog/useBacklogItems.ts:32
+src/backlog/useBacklogItems.ts:39
+src/backlog/useStandupDigest.ts:32
+src/backlog/useStandupDigest.ts:39
+
+# bridge/ — supabase realtime + recent-tasks hooks
+src/bridge/useOrgsList.ts:22
+src/bridge/useRecentTasks.ts:23
+src/bridge/useRecentTasks.ts:30
+
+# process/ — instance-detail + projects-with-instances composite hooks
+src/process/useProcessInstanceDetail.ts:31
+src/process/useProcessInstanceDetail.ts:80
+src/process/useProjectsWithInstances.ts:29
+
+# screens/ — Phase 27/28/32/38 screens; large JSX trees + handlers
+src/screens/ArtifactViewer.tsx:27
+src/screens/BacklogConsumptionScreen.tsx:132
+src/screens/ContainerControlCard.tsx:18
+src/screens/HomeScreen.tsx:20
+src/screens/PairScreen.tsx:8
+src/screens/ProcessInstanceDetail.tsx:98
+src/screens/ProcessInstancesScreen.tsx:55
+src/screens/ProcessInstancesScreen.tsx:107
+src/screens/QuickAddIdeaSheet.tsx:13
+src/screens/QuickPair.tsx:14
+src/screens/RecentTasksCard.tsx:28
+src/screens/SettingsScreen.tsx:18
+src/screens/UpdaterCard.tsx:8

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { useEffect, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
 
 export interface BridgeRow {
   id: string;
@@ -30,9 +30,9 @@ export function useBridgesList(): Hook {
     let cancelled = false;
     void (async () => {
       const { data, error: e } = await client
-        .from("bridges")
-        .select("id, name, org_id, last_seen_at, created_at")
-        .order("created_at", { ascending: false });
+        .from('bridges')
+        .select('id, name, org_id, last_seen_at, created_at')
+        .order('created_at', { ascending: false });
       if (cancelled) return;
       if (e !== null) {
         setError(e.message);

@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from "react";
-import { useAuth } from "./AuthContext";
+import { type FormEvent, useState } from 'react';
+import { useAuth } from './AuthContext';
 
-const AUTH_CALLBACK = "agentcontrol-tray://auth-callback";
+const AUTH_CALLBACK = 'agentcontrol-tray://auth-callback';
 
 export function LoginScreen() {
   const { signInWithMagicLink, supabaseUrl, resetConfig } = useAuth();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,8 +46,7 @@ export function LoginScreen() {
       <header className="brand">
         <h1>Sign in</h1>
         <p className="muted">
-          Connected to{" "}
-          <code className="endpoint">{supabaseUrl ?? "—"}</code>
+          Connected to <code className="endpoint">{supabaseUrl ?? '—'}</code>
         </p>
       </header>
       <form className="form" onSubmit={onSubmit}>
@@ -64,14 +63,10 @@ export function LoginScreen() {
         </label>
         {error !== null && <div className="error">{error}</div>}
         <button type="submit" disabled={busy}>
-          {busy ? "Sending…" : "Send magic link"}
+          {busy ? 'Sending…' : 'Send magic link'}
         </button>
       </form>
-      <button
-        type="button"
-        className="link"
-        onClick={() => void resetConfig()}
-      >
+      <button type="button" className="link" onClick={() => void resetConfig()}>
         Use a different Supabase instance
       </button>
     </main>

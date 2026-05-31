@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { useAuth } from "../auth/AuthContext";
-import { notify } from "../lib/notifier";
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { notify } from '../lib/notifier';
 
 export interface AutonomousTask {
   id: string;
@@ -38,10 +38,10 @@ export function useRecentTasks(orgId: string | null): Hook {
     async function fetchInitial(): Promise<void> {
       if (client === null) return;
       const { data, error: e } = await client
-        .from("autonomous_tasks")
-        .select("id, prompt, status, created_at, claimed_by_bridge_id")
-        .eq("org_id", orgId)
-        .order("created_at", { ascending: false })
+        .from('autonomous_tasks')
+        .select('id, prompt, status, created_at, claimed_by_bridge_id')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
         .limit(PAGE_SIZE);
       if (cancelled) return;
       if (e !== null) {
@@ -49,7 +49,7 @@ export function useRecentTasks(orgId: string | null): Hook {
       } else if (data !== null) {
         setTasks(data as AutonomousTask[]);
         for (const t of data as AutonomousTask[]) {
-          if (t.status === "awaiting_approval") NOTIFY_SET.add(t.id);
+          if (t.status === 'awaiting_approval') NOTIFY_SET.add(t.id);
         }
       }
       setLoading(false);
@@ -60,11 +60,11 @@ export function useRecentTasks(orgId: string | null): Hook {
     const channel = client
       .channel(`autonomous-tasks-${orgId}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "public",
-          table: "autonomous_tasks",
+          event: '*',
+          schema: 'public',
+          table: 'autonomous_tasks',
           filter: `org_id=eq.${orgId}`,
         },
         (payload) => {
@@ -74,14 +74,11 @@ export function useRecentTasks(orgId: string | null): Hook {
             const without = prev.filter((t) => t.id !== next.id);
             return [next, ...without].slice(0, PAGE_SIZE);
           });
-          if (
-            next.status === "awaiting_approval" &&
-            !NOTIFY_SET.has(next.id)
-          ) {
+          if (next.status === 'awaiting_approval' && !NOTIFY_SET.has(next.id)) {
             NOTIFY_SET.add(next.id);
             const preview =
-              next.prompt !== null ? next.prompt.slice(0, 80) : "Task";
-            void notify("AgentControl — approval required", preview);
+              next.prompt !== null ? next.prompt.slice(0, 80) : 'Task';
+            void notify('AgentControl — approval required', preview);
           }
         },
       )

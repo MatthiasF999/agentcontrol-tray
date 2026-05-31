@@ -1,15 +1,15 @@
-import { useMemo, useState } from "react";
-import { usePairingStatus } from "../bridge/usePairingStatus";
-import { useBacklogItems } from "../backlog/useBacklogItems";
-import { useBacklogReleases } from "../backlog/useBacklogReleases";
-import { useStandupDigest } from "../backlog/useStandupDigest";
+import { useMemo, useState } from 'react';
 import type {
   BacklogItem,
   BacklogItemState,
   BacklogRelease,
-} from "../backlog/types";
-import { BacklogQuickAddButton } from "./BacklogQuickAddButton";
-import { DigestModal } from "./DigestModal";
+} from '../backlog/types';
+import { useBacklogItems } from '../backlog/useBacklogItems';
+import { useBacklogReleases } from '../backlog/useBacklogReleases';
+import { useStandupDigest } from '../backlog/useStandupDigest';
+import { usePairingStatus } from '../bridge/usePairingStatus';
+import { BacklogQuickAddButton } from './BacklogQuickAddButton';
+import { DigestModal } from './DigestModal';
 
 interface Props {
   onBack: () => void;
@@ -17,26 +17,26 @@ interface Props {
 }
 
 const PRIORITY_COLOR: Record<string, { bg: string; fg: string }> = {
-  P0: { bg: "#fee2e2", fg: "#991b1b" },
-  P1: { bg: "#fef3c7", fg: "#78350f" },
-  P2: { bg: "#dbeafe", fg: "#1e3a8a" },
-  P3: { bg: "#e4e4e7", fg: "#27272a" },
+  P0: { bg: '#fee2e2', fg: '#991b1b' },
+  P1: { bg: '#fef3c7', fg: '#78350f' },
+  P2: { bg: '#dbeafe', fg: '#1e3a8a' },
+  P3: { bg: '#e4e4e7', fg: '#27272a' },
 };
 
 const STATE_COLOR: Record<string, { bg: string; fg: string }> = {
-  idea: { bg: "#e4e4e7", fg: "#27272a" },
-  groomed: { bg: "#dbeafe", fg: "#1e3a8a" },
-  scheduled: { bg: "#ede9fe", fg: "#4c1d95" },
-  in_progress: { bg: "#fef3c7", fg: "#78350f" },
-  done: { bg: "#dcfce7", fg: "#14532d" },
-  released: { bg: "#d1fae5", fg: "#065f46" },
-  blocked: { bg: "#fee2e2", fg: "#991b1b" },
-  cancelled: { bg: "#f4f4f5", fg: "#71717a" },
+  idea: { bg: '#e4e4e7', fg: '#27272a' },
+  groomed: { bg: '#dbeafe', fg: '#1e3a8a' },
+  scheduled: { bg: '#ede9fe', fg: '#4c1d95' },
+  in_progress: { bg: '#fef3c7', fg: '#78350f' },
+  done: { bg: '#dcfce7', fg: '#14532d' },
+  released: { bg: '#d1fae5', fg: '#065f46' },
+  blocked: { bg: '#fee2e2', fg: '#991b1b' },
+  cancelled: { bg: '#f4f4f5', fg: '#71717a' },
 };
 
-function Badge({ kind, value }: { kind: "priority" | "state"; value: string }) {
-  const map = kind === "priority" ? PRIORITY_COLOR : STATE_COLOR;
-  const c = map[value] ?? { bg: "#e4e4e7", fg: "#27272a" };
+function Badge({ kind, value }: { kind: 'priority' | 'state'; value: string }) {
+  const map = kind === 'priority' ? PRIORITY_COLOR : STATE_COLOR;
+  const c = map[value] ?? { bg: '#e4e4e7', fg: '#27272a' };
   return (
     <span className="badge" style={{ backgroundColor: c.bg, color: c.fg }}>
       {value}
@@ -69,21 +69,22 @@ function ReleaseSection({
 }) {
   const heading =
     release === null
-      ? "Unscheduled (no release)"
-      : `${release.name}${release.semver !== null ? ` · ${release.semver}` : ""}`;
+      ? 'Unscheduled (no release)'
+      : `${release.name}${release.semver !== null ? ` · ${release.semver}` : ''}`;
   const sub =
     release === null
-      ? `${items.length} item${items.length === 1 ? "" : "s"}`
-      : `${release.state} · ${items.length} item${items.length === 1 ? "" : "s"}${release.target_date !== null ? ` · target ${release.target_date}` : ""}`;
+      ? `${items.length} item${items.length === 1 ? '' : 's'}`
+      : `${release.state} · ${items.length} item${items.length === 1 ? '' : 's'}${release.target_date !== null ? ` · target ${release.target_date}` : ''}`;
   return (
     <section className="card">
       <div className="project-card-head">
         <h2>{heading}</h2>
         <span className="muted">{sub}</span>
       </div>
-      {release?.goal_markdown !== null && release?.goal_markdown !== undefined && (
-        <p className="muted">{release.goal_markdown}</p>
-      )}
+      {release?.goal_markdown !== null &&
+        release?.goal_markdown !== undefined && (
+          <p className="muted">{release.goal_markdown}</p>
+        )}
       {items.length === 0 ? (
         <p className="muted">No items.</p>
       ) : (
@@ -97,14 +98,14 @@ function ReleaseSection({
   );
 }
 
-type Filter = "all" | "active" | "blocked" | "released";
+type Filter = 'all' | 'active' | 'blocked' | 'released';
 
 function passes(filter: Filter, item: BacklogItem): boolean {
-  if (filter === "all") return true;
-  if (filter === "blocked") return item.state === "blocked";
-  if (filter === "released")
-    return item.state === "released" || item.state === "done";
-  const active: BacklogItemState[] = ["groomed", "scheduled", "in_progress"];
+  if (filter === 'all') return true;
+  if (filter === 'blocked') return item.state === 'blocked';
+  if (filter === 'released')
+    return item.state === 'released' || item.state === 'done';
+  const active: BacklogItemState[] = ['groomed', 'scheduled', 'in_progress'];
   return active.includes(item.state);
 }
 
@@ -114,8 +115,7 @@ function groupByRelease(
 ): Array<{ release: BacklogRelease | null; items: BacklogItem[] }> {
   // Active releases first, then planning, then unscheduled bucket.
   const ordered = [...releases].sort((a, b) => {
-    const rank = (s: string) =>
-      s === "active" ? 0 : s === "planning" ? 1 : 2;
+    const rank = (s: string) => (s === 'active' ? 0 : s === 'planning' ? 1 : 2);
     return rank(a.state) - rank(b.state);
   });
   const groups = ordered.map((r) => ({
@@ -131,11 +131,11 @@ function groupByRelease(
 
 export function BacklogConsumptionScreen({ onBack, showDigestOnOpen }: Props) {
   const { status } = usePairingStatus();
-  const orgId = status?.state === "paired" ? status.orgId : null;
+  const orgId = status?.state === 'paired' ? status.orgId : null;
   const { items, loading, error } = useBacklogItems(orgId);
   const { releases } = useBacklogReleases(orgId);
   const { latest: digest } = useStandupDigest(orgId);
-  const [filter, setFilter] = useState<Filter>("active");
+  const [filter, setFilter] = useState<Filter>('active');
   const [digestOpen, setDigestOpen] = useState<boolean>(
     showDigestOnOpen === true,
   );
@@ -164,11 +164,11 @@ export function BacklogConsumptionScreen({ onBack, showDigestOnOpen }: Props) {
 
       {digest !== null && digest.digest_markdown !== null && (
         <section className="card digest-banner">
-          <strong>Latest standup digest</strong>{" "}
+          <strong>Latest standup digest</strong>{' '}
           <span className="muted">
             {digest.delivered_at !== null
               ? new Date(digest.delivered_at).toLocaleString()
-              : ""}
+              : ''}
           </span>
           <button
             type="button"
@@ -181,11 +181,11 @@ export function BacklogConsumptionScreen({ onBack, showDigestOnOpen }: Props) {
       )}
 
       <div className="filter-row">
-        {(["active", "blocked", "released", "all"] as Filter[]).map((f) => (
+        {(['active', 'blocked', 'released', 'all'] as Filter[]).map((f) => (
           <button
             key={f}
             type="button"
-            className={f === filter ? "filter-on" : ""}
+            className={f === filter ? 'filter-on' : ''}
             onClick={() => setFilter(f)}
           >
             {f}
@@ -211,19 +211,21 @@ export function BacklogConsumptionScreen({ onBack, showDigestOnOpen }: Props) {
       )}
       {groups.map((g) => (
         <ReleaseSection
-          key={g.release?.id ?? "unscheduled"}
+          key={g.release?.id ?? 'unscheduled'}
           release={g.release}
           items={g.items}
         />
       ))}
 
       {orgId !== null && <BacklogQuickAddButton orgId={orgId} />}
-      {digestOpen && digest?.digest_markdown !== undefined && digest?.digest_markdown !== null && (
-        <DigestModal
-          markdown={digest.digest_markdown}
-          onClose={() => setDigestOpen(false)}
-        />
-      )}
+      {digestOpen &&
+        digest?.digest_markdown !== undefined &&
+        digest?.digest_markdown !== null && (
+          <DigestModal
+            markdown={digest.digest_markdown}
+            onClose={() => setDigestOpen(false)}
+          />
+        )}
     </main>
   );
 }

@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { useAuth } from "../auth/AuthContext";
-import { useBridge } from "../bridge/BridgeClientContext";
-import { usePairingStatus } from "../bridge/usePairingStatus";
-import { useOrgsList } from "../bridge/useOrgsList";
-import { BridgeError } from "../bridge/bridgeClient";
+import { useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { useBridge } from '../bridge/BridgeClientContext';
+import { BridgeError } from '../bridge/bridgeClient';
+import { useOrgsList } from '../bridge/useOrgsList';
+import { usePairingStatus } from '../bridge/usePairingStatus';
 
 interface PairBridgeResult {
   bridge_id: string;
@@ -16,28 +16,28 @@ export function QuickPair() {
   const { orgs, loading: orgsLoading, error: orgsError } = useOrgsList();
   const { status, refresh } = usePairingStatus();
   const bridge = useBridge();
-  const [orgId, setOrgId] = useState("");
-  const [label, setLabel] = useState("");
+  const [orgId, setOrgId] = useState('');
+  const [label, setLabel] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const adminOrgs = orgs.filter(
-    (o) => o.role === "owner" || o.role === "admin",
+    (o) => o.role === 'owner' || o.role === 'admin',
   );
-  const haveCode = status !== null && status.state === "unpaired";
+  const haveCode = status !== null && status.state === 'unpaired';
 
   async function onQuickPair(): Promise<void> {
     if (client === null) return;
     if (!haveCode) return;
-    if (status.state !== "unpaired") return;
-    if (orgId === "") return;
+    if (status.state !== 'unpaired') return;
+    if (orgId === '') return;
     setBusy(true);
     setError(null);
     try {
-      const { data, error: e } = await client.rpc("pair_bridge", {
+      const { data, error: e } = await client.rpc('pair_bridge', {
         p_code: status.code,
         p_org_id: orgId,
-        p_label: label.trim() === "" ? null : label.trim(),
+        p_label: label.trim() === '' ? null : label.trim(),
         p_tailscale_host: null,
       });
       if (e !== null) {
@@ -67,12 +67,12 @@ export function QuickPair() {
       <h2>Quick pair</h2>
       {!haveCode && (
         <p className="muted">
-          Bridge has no active claim code (state:{" "}
-          <code className="endpoint">{status?.state ?? "unknown"}</code>).
-          Quick pair available when bridge first starts unpaired.
+          Bridge has no active claim code (state:{' '}
+          <code className="endpoint">{status?.state ?? 'unknown'}</code>). Quick
+          pair available when bridge first starts unpaired.
         </p>
       )}
-      {haveCode && status.state === "unpaired" && (
+      {haveCode && status.state === 'unpaired' && (
         <>
           <p className="muted">
             Bridge claim: <code className="endpoint">{status.code}</code>
@@ -83,8 +83,8 @@ export function QuickPair() {
           {orgsLoading && <p className="muted">Loading orgs…</p>}
           {!orgsLoading && adminOrgs.length === 0 && (
             <p className="muted">
-              You're not an owner or admin of any org. Quick pair requires
-              owner or admin role.
+              You're not an owner or admin of any org. Quick pair requires owner
+              or admin role.
             </p>
           )}
           {adminOrgs.length > 0 && (
@@ -116,9 +116,9 @@ export function QuickPair() {
               <button
                 type="button"
                 onClick={() => void onQuickPair()}
-                disabled={busy || orgId === ""}
+                disabled={busy || orgId === ''}
               >
-                {busy ? "Pairing…" : "Pair this bridge"}
+                {busy ? 'Pairing…' : 'Pair this bridge'}
               </button>
             </div>
           )}

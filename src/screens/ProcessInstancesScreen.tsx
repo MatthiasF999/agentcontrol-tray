@@ -1,13 +1,13 @@
-import { useState } from "react";
-import { useAuth } from "../auth/AuthContext";
-import { usePairingStatus } from "../bridge/usePairingStatus";
-import { useProjectsWithInstances } from "../process/useProjectsWithInstances";
+import { useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { usePairingStatus } from '../bridge/usePairingStatus';
 import {
   instanceIsActive,
   type ProcessInstanceRow,
   type ProjectWithInstances,
-} from "../process/types";
-import { ProcessInstanceDetail } from "./ProcessInstanceDetail";
+} from '../process/types';
+import { useProjectsWithInstances } from '../process/useProjectsWithInstances';
+import { ProcessInstanceDetail } from './ProcessInstanceDetail';
 
 interface Props {
   onBack: () => void;
@@ -35,7 +35,7 @@ function InstanceRow({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onOpen(instance.id);
+        if (e.key === 'Enter' || e.key === ' ') onOpen(instance.id);
       }}
     >
       <div className="instance-row-head">
@@ -46,7 +46,7 @@ function InstanceRow({
       </div>
       <div className="muted">
         {phaseLabel} · {artifactsCount} artifact
-        {artifactsCount === 1 ? "" : "s"} · v{instance.template_version}
+        {artifactsCount === 1 ? '' : 's'} · v{instance.template_version}
       </div>
     </li>
   );
@@ -65,7 +65,7 @@ function ProjectGroup({
       <div className="project-card-head">
         <h2>{project.name}</h2>
         <span className="muted">
-          {instances.length} instance{instances.length === 1 ? "" : "s"}
+          {instances.length} instance{instances.length === 1 ? '' : 's'}
         </span>
       </div>
       {project.description !== null && (
@@ -73,8 +73,8 @@ function ProjectGroup({
       )}
       {instances.length === 0 ? (
         <p className="muted">
-          No process instances yet. Use the AgentControl app (or the
-          tray's "Start process" action — landing in 32.6) to kick one off.
+          No process instances yet. Use the AgentControl app (or the tray's
+          "Start process" action — landing in 32.6) to kick one off.
         </p>
       ) : (
         <ul className="instance-list">
@@ -93,7 +93,7 @@ function ProjectGroup({
         className="link"
         onClick={() =>
           alert(
-            "Process-creation lands in Phase 32.6 (tray seeded with the Hacker School default template). For now, create from the AgentControl app.",
+            'Process-creation lands in Phase 32.6 (tray seeded with the Hacker School default template). For now, create from the AgentControl app.',
           )
         }
         style={{ marginTop: 8 }}
@@ -106,7 +106,7 @@ function ProjectGroup({
 
 export function ProcessInstancesScreen({ onBack }: Props) {
   const { status } = usePairingStatus();
-  const orgId = status?.state === "paired" ? status.orgId : null;
+  const orgId = status?.state === 'paired' ? status.orgId : null;
   const { session } = useAuth();
   const { groups, loading, error } = useProjectsWithInstances(orgId);
   const [openInstanceId, setOpenInstanceId] = useState<string | null>(null);

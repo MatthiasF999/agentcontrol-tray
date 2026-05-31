@@ -1,17 +1,17 @@
-import { useState, type FormEvent } from "react";
-import { useAuth } from "../auth/AuthContext";
-import { useBridge } from "../bridge/BridgeClientContext";
-import { usePairingStatus } from "../bridge/usePairingStatus";
-import { BridgeError } from "../bridge/bridgeClient";
-import { QuickPair } from "./QuickPair";
+import { type FormEvent, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { useBridge } from '../bridge/BridgeClientContext';
+import { BridgeError } from '../bridge/bridgeClient';
+import { usePairingStatus } from '../bridge/usePairingStatus';
+import { QuickPair } from './QuickPair';
 
 export function PairScreen() {
   const { supabaseUrl, signOut } = useAuth();
   const bridge = useBridge();
   const { status, error: pollError, refresh } = usePairingStatus();
-  const [bridgeId, setBridgeId] = useState("");
-  const [orgId, setOrgId] = useState("");
-  const [refreshToken, setRefreshToken] = useState("");
+  const [bridgeId, setBridgeId] = useState('');
+  const [orgId, setOrgId] = useState('');
+  const [refreshToken, setRefreshToken] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -30,13 +30,13 @@ export function PairScreen() {
     } catch (e) {
       if (e instanceof BridgeError && e.status === 404) {
         setSubmitError(
-          "Bridge does not implement POST /pair/accept yet. " +
-            "Update bridge to >= phase-28.1 to enable tray pairing.",
+          'Bridge does not implement POST /pair/accept yet. ' +
+            'Update bridge to >= phase-28.1 to enable tray pairing.',
         );
       } else if (e instanceof BridgeError && e.status === 409) {
         setSubmitError(
-          "Bridge is already paired. Reset bridge token (delete " +
-            "data/bridge-token.json) to re-pair, or sign out here.",
+          'Bridge is already paired. Reset bridge token (delete ' +
+            'data/bridge-token.json) to re-pair, or sign out here.',
         );
       } else {
         setSubmitError(e instanceof Error ? e.message : String(e));
@@ -67,8 +67,8 @@ export function PairScreen() {
       <details className="card">
         <summary>Manual pairing (advanced)</summary>
         <p className="muted">
-          Paste a bridge token minted via supabase operator flow. Use
-          quick-pair above when possible.
+          Paste a bridge token minted via supabase operator flow. Use quick-pair
+          above when possible.
         </p>
         <form className="form" onSubmit={onSubmit}>
           <label>
@@ -102,12 +102,12 @@ export function PairScreen() {
             />
           </label>
           {submitError !== null && <div className="error">{submitError}</div>}
-          <button type="submit" disabled={busy || status?.state === "paired"}>
+          <button type="submit" disabled={busy || status?.state === 'paired'}>
             {busy
-              ? "Pairing…"
-              : status?.state === "paired"
-              ? "Already paired"
-              : "Pair this bridge"}
+              ? 'Pairing…'
+              : status?.state === 'paired'
+                ? 'Already paired'
+                : 'Pair this bridge'}
           </button>
         </form>
       </details>

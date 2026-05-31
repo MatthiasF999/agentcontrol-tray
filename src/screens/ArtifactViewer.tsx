@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import type { ProcessArtifactRow, ProcessInstanceRow } from "../process/types";
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { useMemo, useState } from 'react';
+import type { ProcessArtifactRow, ProcessInstanceRow } from '../process/types';
 
 interface Props {
   artifact: ProcessArtifactRow;
@@ -32,7 +32,7 @@ export function ArtifactViewer({
 }: Props) {
   const [imgErr, setImgErr] = useState<string | null>(null);
 
-  const isHtmlPrototype = artifact.artifact_type === "html-prototype";
+  const isHtmlPrototype = artifact.artifact_type === 'html-prototype';
   const isPublished = artifact.published_url !== null;
 
   const iframeSrc = useMemo<string | null>(() => {
@@ -42,14 +42,11 @@ export function ArtifactViewer({
     // `process_instances.worktree_path` (open-q 13c). We resolve at render
     // time. file:// is wrapped by Tauri's asset:// protocol so the iframe
     // sandbox + allow-same-origin works without WebView fighting file: CORS.
-    if (
-      instance.worktree_path === null ||
-      artifact.worktree_path === null
-    ) {
+    if (instance.worktree_path === null || artifact.worktree_path === null) {
       return null;
     }
-    const base = instance.worktree_path.replace(/\/+$/, "");
-    const rel = artifact.worktree_path.replace(/^\/+|\/+$/g, "");
+    const base = instance.worktree_path.replace(/\/+$/, '');
+    const rel = artifact.worktree_path.replace(/^\/+|\/+$/g, '');
     const indexPath = `${base}/${rel}/index.html`;
     try {
       return convertFileSrc(indexPath);
@@ -72,16 +69,16 @@ export function ArtifactViewer({
     return (
       <details className="artifact-fallback">
         <summary>
-          {artifact.artifact_type}{" "}
+          {artifact.artifact_type}{' '}
           <span className="muted">
-            (phase {artifact.phase_index} — added{" "}
+            (phase {artifact.phase_index} — added{' '}
             {new Date(artifact.created_at).toLocaleString()})
           </span>
         </summary>
-        <pre style={{ maxHeight: 240, overflow: "auto", fontSize: 12 }}>
+        <pre style={{ maxHeight: 240, overflow: 'auto', fontSize: 12 }}>
           {JSON.stringify(artifact.data, null, 2) ??
             artifact.worktree_path ??
-            "(empty)"}
+            '(empty)'}
         </pre>
       </details>
     );
@@ -91,27 +88,31 @@ export function ArtifactViewer({
     return (
       <div className="artifact-empty muted">
         Prototype is missing both <code>worktree_path</code> and a published
-        URL. The authoring bridge has not synced yet — pair on a bridge with
-        the worktree mounted.
+        URL. The authoring bridge has not synced yet — pair on a bridge with the
+        worktree mounted.
         {imgErr !== null && <div className="error">{imgErr}</div>}
       </div>
     );
   }
 
   return (
-    <div className={`artifact-viewer ${expanded ? "expanded" : ""}`}>
+    <div className={`artifact-viewer ${expanded ? 'expanded' : ''}`}>
       <div className="artifact-viewer-toolbar">
         <span className="muted">
-          {isPublished ? "Published snapshot" : "Draft (worktree)"} ·{" "}
+          {isPublished ? 'Published snapshot' : 'Draft (worktree)'} ·{' '}
           {artifact.published_expires_at !== null && (
             <span>
-              expires{" "}
+              expires{' '}
               {new Date(artifact.published_expires_at).toLocaleDateString()}
             </span>
           )}
         </span>
         <div className="artifact-viewer-actions">
-          <button type="button" className="link" onClick={() => void onOpenExternal()}>
+          <button
+            type="button"
+            className="link"
+            onClick={() => void onOpenExternal()}
+          >
             Open in browser
           </button>
           {onFullscreen !== undefined && (

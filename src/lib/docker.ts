@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from '@tauri-apps/api/core';
 
 export interface DockerAvailability {
   installed: boolean;
@@ -13,14 +13,14 @@ export interface DockerRunResult {
 }
 
 export async function checkDocker(): Promise<DockerAvailability> {
-  return await invoke<DockerAvailability>("docker_available");
+  return await invoke<DockerAvailability>('docker_available');
 }
 
 export async function composeRun(
   composeDir: string,
   args: string[],
 ): Promise<DockerRunResult> {
-  return await invoke<DockerRunResult>("docker_compose", {
+  return await invoke<DockerRunResult>('docker_compose', {
     composeDir,
     args,
   });

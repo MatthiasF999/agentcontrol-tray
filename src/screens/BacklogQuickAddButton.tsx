@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { QuickAddIdeaSheet } from "./QuickAddIdeaSheet";
+import { useState } from 'react';
+import { QuickAddIdeaSheet } from './QuickAddIdeaSheet';
 
 interface Props {
   orgId: string;
