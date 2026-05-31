@@ -5,6 +5,7 @@ import { ContainerControlCard } from "./ContainerControlCard";
 
 interface Props {
   onOpenSettings: () => void;
+  onOpenProcesses: () => void;
 }
 
 function statusColor(state: string): string {
@@ -13,7 +14,7 @@ function statusColor(state: string): string {
   return "#ef4444";
 }
 
-export function HomeScreen({ onOpenSettings }: Props) {
+export function HomeScreen({ onOpenSettings, onOpenProcesses }: Props) {
   const { session, supabaseUrl, signOut } = useAuth();
   const { status, error } = usePairingStatus();
 
@@ -40,9 +41,14 @@ export function HomeScreen({ onOpenSettings }: Props) {
           }}
         >
           <h1>AgentControl</h1>
-          <button type="button" onClick={onOpenSettings}>
-            Settings
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={onOpenProcesses}>
+              Processes
+            </button>
+            <button type="button" onClick={onOpenSettings}>
+              Settings
+            </button>
+          </div>
         </div>
         <div className="status-row">
           <span className="status-dot" style={{ backgroundColor: color }} />

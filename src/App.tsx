@@ -4,6 +4,7 @@ import { ConfigScreen } from "./auth/ConfigScreen";
 import { LoginScreen } from "./auth/LoginScreen";
 import { HomeScreen } from "./screens/HomeScreen";
 import { PairScreen } from "./screens/PairScreen";
+import { ProcessInstancesScreen } from "./screens/ProcessInstancesScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { registerDeepLinkAuth } from "./auth/deepLinkHandler";
 import { getSupabase } from "./lib/supabase";
@@ -15,7 +16,7 @@ import { usePairingStatus } from "./bridge/usePairingStatus";
 import { useTraySync } from "./bridge/useTraySync";
 import "./App.css";
 
-type View = "home" | "settings";
+type View = "home" | "settings" | "processes";
 
 function SignedInRouter() {
   useBridge();
@@ -35,10 +36,18 @@ function SignedInRouter() {
   if (view === "settings") {
     return <SettingsScreen onBack={() => setView("home")} />;
   }
+  if (view === "processes") {
+    return <ProcessInstancesScreen onBack={() => setView("home")} />;
+  }
 
   if (error !== null && status === null) return <PairScreen />;
   if (status === null || status.state !== "paired") return <PairScreen />;
-  return <HomeScreen onOpenSettings={() => setView("settings")} />;
+  return (
+    <HomeScreen
+      onOpenSettings={() => setView("settings")}
+      onOpenProcesses={() => setView("processes")}
+    />
+  );
 }
 
 function Router() {

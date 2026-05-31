@@ -235,6 +235,189 @@ button.link {
   }
 }
 
+/* ---- Phase 32.4: Process instance dashboard ---- */
+
+.project-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.instance-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.instance-row {
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: #fafafa;
+}
+
+.instance-row:hover,
+.instance-row:focus {
+  background: #f1f5f9;
+  outline: 2px solid #3b82f6;
+  outline-offset: -1px;
+}
+
+.instance-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.phase-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.phase-timeline-step {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.phase-timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.phase-timeline-body {
+  flex: 1;
+  font-size: 13px;
+}
+
+.phase-runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.phase-runs code {
+  background: #f4f4f5;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+/* ---- Phase 32.5: HTML prototype viewer ---- */
+
+.artifact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.artifact-viewer {
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.artifact-viewer-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: #f4f4f5;
+  border-bottom: 1px solid #e4e4e7;
+  font-size: 12px;
+}
+
+.artifact-viewer-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.artifact-iframe {
+  width: 100%;
+  height: 360px;
+  border: 0;
+  background: #fff;
+}
+
+.artifact-viewer.expanded .artifact-iframe {
+  height: calc(100vh - 80px);
+}
+
+.artifact-fallback summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.artifact-empty {
+  border: 1px dashed #d4d4d8;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 13px;
+}
+
+.fullscreen-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.fullscreen-viewer-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid #e4e4e7;
+}
+
+@media (prefers-color-scheme: dark) {
+  .instance-row {
+    background: #18181b;
+    border-color: #3f3f46;
+  }
+  .instance-row:hover,
+  .instance-row:focus {
+    background: #1f2937;
+  }
+  .artifact-viewer,
+  .fullscreen-viewer {
+    background: #18181b;
+    border-color: #3f3f46;
+  }
+  .artifact-viewer-toolbar,
+  .fullscreen-viewer-bar {
+    background: #27272a;
+    border-color: #3f3f46;
+  }
+  .artifact-empty {
+    border-color: #3f3f46;
+  }
+  .phase-runs code {
+    background: #3f3f46;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f4f4f5;
