@@ -22,6 +22,12 @@ on:
         required: true
         type: string
 
+# Opt JavaScript actions into Node.js 24 (default June 16, 2026; Node 20
+# removed September 16, 2026). Avoids the deprecation warning surfaced
+# in the v0.1.1 build annotations.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   build:
     permissions:
