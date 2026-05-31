@@ -57,7 +57,7 @@
       "endpoints": [
         "https://github.com/agentcontrol/agentcontrol-tray/releases/latest/download/latest.json"
       ],
-      "pubkey": "REPLACE_WITH_TAURI_SIGNER_PUBKEY_PHASE_27_7_OPERATOR_ACTION"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY5QTgwNTc1Q0Y5NDQ2MkEKUldRcVJwVFBkUVdvK2NtRlZ5c2kwdDliY3FWakdvYUFROXdsN3N4WXBKRloyLzQwUzErZFExbU8K"
     }
   }
 }
