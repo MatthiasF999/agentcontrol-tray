@@ -1,11 +1,14 @@
 import { useAuth } from "../auth/AuthContext";
 import { usePairingStatus } from "../bridge/usePairingStatus";
+import { useStandupDigest } from "../backlog/useStandupDigest";
 import { RecentTasksCard } from "./RecentTasksCard";
 import { ContainerControlCard } from "./ContainerControlCard";
+import { BacklogQuickAddButton } from "./BacklogQuickAddButton";
 
 interface Props {
   onOpenSettings: () => void;
   onOpenProcesses: () => void;
+  onOpenBacklog: (showDigest: boolean) => void;
 }
 
 function statusColor(state: string): string {
@@ -14,9 +17,15 @@ function statusColor(state: string): string {
   return "#ef4444";
 }
 
-export function HomeScreen({ onOpenSettings, onOpenProcesses }: Props) {
+export function HomeScreen({
+  onOpenSettings,
+  onOpenProcesses,
+  onOpenBacklog,
+}: Props) {
   const { session, supabaseUrl, signOut } = useAuth();
   const { status, error } = usePairingStatus();
+  const orgIdForDigest = status?.state === "paired" ? status.orgId : null;
+  const { latest: digest } = useStandupDigest(orgIdForDigest);
 
   const color =
     error !== null ? "#ef4444" : statusColor(status?.state ?? "expired");
@@ -42,6 +51,9 @@ export function HomeScreen({ onOpenSettings, onOpenProcesses }: Props) {
         >
           <h1>AgentControl</h1>
           <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={() => onOpenBacklog(false)}>
+              Backlog
+            </button>
             <button type="button" onClick={onOpenProcesses}>
               Processes
             </button>
@@ -80,6 +92,19 @@ export function HomeScreen({ onOpenSettings, onOpenProcesses }: Props) {
         </dl>
       </section>
 
+      {digest !== null && (
+        <section className="card digest-banner">
+          <strong>📋 Standup digest available</strong>
+          <button
+            type="button"
+            className="link"
+            onClick={() => onOpenBacklog(true)}
+          >
+            View →
+          </button>
+        </section>
+      )}
+
       {orgId !== null && <RecentTasksCard orgId={orgId} />}
 
       <ContainerControlCard />
@@ -87,6 +112,8 @@ export function HomeScreen({ onOpenSettings, onOpenProcesses }: Props) {
       <button type="button" onClick={() => void signOut()}>
         Sign out
       </button>
+
+      {orgId !== null && <BacklogQuickAddButton orgId={orgId} />}
     </main>
   );
 }
