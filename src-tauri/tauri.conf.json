@@ -58,7 +58,7 @@
       "endpoints": [
         "https://github.com/agentcontrol/agentcontrol-tray/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY5QTgwNTc1Q0Y5NDQ2MkEKUldRcVJwVFBkUVdvK2NtRlZ5c2kwdDliY3FWakdvYUFROXdsN3N4WXBKRloyLzQwUzErZFExbU8K"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRBQkIyRTIxREFEMzU0ODkKUldTSlZOUGFJUzY3U3NnUFpSQVUrVno4akgrNWNzT3llOGx0elBiV0RkYlUrcWM4NlVCTDVCVk0K"
     }
   }
 }
