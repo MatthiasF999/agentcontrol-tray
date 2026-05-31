@@ -56,7 +56,7 @@
     },
     "updater": {
       "endpoints": [
-        "https://github.com/agentcontrol/agentcontrol-tray/releases/latest/download/latest.json"
+        "https://github.com/MatthiasF999/agentcontrol-tray/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRBQkIyRTIxREFEMzU0ODkKUldTSlZOUGFJUzY3U3NnUFpSQVUrVno4akgrNWNzT3llOGx0elBiV0RkYlUrcWM4NlVCTDVCVk0K"
     }
