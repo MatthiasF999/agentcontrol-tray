@@ -1,11 +1,15 @@
+mod bridge_supervisor;
 mod docker;
 
+use std::sync::Arc;
+
+use bridge_supervisor::BridgeSupervisor;
 use tauri::{
     image::Image,
     include_image,
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent,
+    Manager, RunEvent, WindowEvent,
 };
 
 const TRAY_ID: &str = "agentcontrol-main";
@@ -41,6 +45,27 @@ fn update_tray_status(
     Ok(())
 }
 
+/// Phase 39.11 — let the React UI inspect bridge supervisor state.
+/// Returns ("running" | "stopped", optional last-error message).
+#[tauri::command]
+fn bridge_status(app: tauri::AppHandle) -> Result<(String, Option<String>), String> {
+    let supervisor = app.state::<Arc<BridgeSupervisor>>();
+    if supervisor.is_running() {
+        Ok(("running".to_string(), None))
+    } else {
+        Ok(("stopped".to_string(), None))
+    }
+}
+
+/// Phase 39.11 — restart the bridge child (after env edits or Node
+/// install). Tray menu wires "Restart bridge" to this.
+#[tauri::command]
+fn bridge_restart(app: tauri::AppHandle) -> Result<u32, String> {
+    let supervisor = app.state::<Arc<BridgeSupervisor>>();
+    supervisor.kill();
+    supervisor.spawn(&app)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -68,9 +93,27 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
+            // Phase 39.11 — bring up the bridge child as soon as the
+            // tray boots. Failures are non-fatal: we surface them in
+            // the menu so the user can install Node + retry. The
+            // supervisor is shared as managed state so React + menu
+            // handlers can both query / restart.
+            let supervisor: Arc<BridgeSupervisor> = Arc::new(BridgeSupervisor::new());
+            app.manage(supervisor.clone());
+            match supervisor.spawn(&app.handle()) {
+                Ok(pid) => {
+                    eprintln!("[tray] bridge spawned pid={pid}");
+                }
+                Err(err) => {
+                    eprintln!("[tray] bridge spawn failed: {err}");
+                }
+            }
+
             let show_item = MenuItem::with_id(app, "show", "Open AgentControl", true, None::<&str>)?;
+            let restart_item =
+                MenuItem::with_id(app, "restart_bridge", "Restart bridge", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            let menu = Menu::with_items(app, &[&show_item, &restart_item, &quit_item])?;
 
             let _tray = TrayIconBuilder::with_id(TRAY_ID)
                 .icon(include_image!("icons/status-red-32.png"))
@@ -82,6 +125,14 @@ pub fn run() {
                         if let Some(win) = app.get_webview_window("main") {
                             let _ = win.show();
                             let _ = win.set_focus();
+                        }
+                    }
+                    "restart_bridge" => {
+                        let supervisor = app.state::<Arc<BridgeSupervisor>>();
+                        supervisor.kill();
+                        match supervisor.spawn(app) {
+                            Ok(pid) => eprintln!("[tray] bridge restarted pid={pid}"),
+                            Err(err) => eprintln!("[tray] bridge restart failed: {err}"),
                         }
                     }
                     "quit" => {
@@ -114,9 +165,20 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             show_main_window,
             update_tray_status,
+            bridge_status,
+            bridge_restart,
             docker::docker_available,
             docker::docker_compose,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        // Phase 39.11 — clean shutdown of the bridge child on app
+        // exit. `.run` + `on_run_event` give us a hook into the event
+        // loop so we kill the supervisor before the process tears down.
+        .run(|app_handle, event| {
+            if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {
+                let supervisor = app_handle.state::<Arc<BridgeSupervisor>>();
+                supervisor.kill();
+            }
+        });
 }

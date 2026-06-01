@@ -111,6 +111,42 @@ jobs:
       - name: Install web deps
         run: pnpm install --frozen-lockfile --prefer-offline
 
+      # Phase 39.11 — bundle the bridge as a Tauri resource so the
+      # tray installer ships a working bridge alongside the GUI. We
+      # check out the sibling agentcontrol-bridge repo, build it, and
+      # the bundle-bridge.sh script copies dist/ + node_modules/ +
+      # shared/policy/ into src-tauri/bridge/ (referenced by
+      # tauri.conf.json bundle.resources).
+      - name: Checkout sibling bridge repo
+        uses: actions/checkout@v4
+        with:
+          repository: MatthiasF999/agentcontrol-bridge
+          path: ../agentcontrol-bridge
+          token: ${{ secrets.BRIDGE_REPO_TOKEN }}
+
+      - name: Checkout sibling shared/policy
+        uses: actions/checkout@v4
+        with:
+          repository: MatthiasF999/agentcontrol-supabase
+          path: ../agentcontrol-supabase
+          sparse-checkout: |
+            shared/policy
+          sparse-checkout-cone-mode: false
+          token: ${{ secrets.BRIDGE_REPO_TOKEN }}
+
+      - name: Stage shared/policy next to bridge repo
+        shell: bash
+        run: |
+          mkdir -p ../shared
+          cp -r ../agentcontrol-supabase/shared/policy ../shared/policy
+
+      - name: Bundle bridge into tray resources
+        shell: bash
+        env:
+          BRIDGE_REPO: ${{ github.workspace }}/../agentcontrol-bridge
+          FRESH_BUILD: 'true'
+        run: bash scripts/bundle-bridge.sh
+
       # Sync the version field in tauri.conf.json + package.json with the
       # git tag (or workflow_dispatch input). Single source of truth: the
       # tag. No commit needed — the patched files only exist on the
