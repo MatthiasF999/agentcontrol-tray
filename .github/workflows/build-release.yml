@@ -117,18 +117,21 @@ jobs:
       # the bundle-bridge.sh script copies dist/ + node_modules/ +
       # shared/policy/ into src-tauri/bridge/ (referenced by
       # tauri.conf.json bundle.resources).
+      # actions/checkout refuses paths outside $GITHUB_WORKSPACE so we
+      # stage the sibling repos INSIDE the workspace under .deps/ and
+      # tell bundle-bridge.sh where they ended up via env.
       - name: Checkout sibling bridge repo
         uses: actions/checkout@v4
         with:
           repository: MatthiasF999/agentcontrol-bridge
-          path: ../agentcontrol-bridge
+          path: .deps/agentcontrol-bridge
           token: ${{ secrets.BRIDGE_REPO_TOKEN }}
 
       - name: Checkout sibling shared/policy
         uses: actions/checkout@v4
         with:
           repository: MatthiasF999/agentcontrol-supabase
-          path: ../agentcontrol-supabase
+          path: .deps/agentcontrol-supabase
           sparse-checkout: |
             shared/policy
           sparse-checkout-cone-mode: false
@@ -137,13 +140,16 @@ jobs:
       - name: Stage shared/policy next to bridge repo
         shell: bash
         run: |
-          mkdir -p ../shared
-          cp -r ../agentcontrol-supabase/shared/policy ../shared/policy
+          # bundle-bridge.sh expects shared/policy as a sibling of the
+          # bridge checkout (mirrors the local-dev layout). Copy from
+          # the sparse-checkout into .deps/shared/policy.
+          mkdir -p .deps/shared
+          cp -r .deps/agentcontrol-supabase/shared/policy .deps/shared/policy
 
       - name: Bundle bridge into tray resources
         shell: bash
         env:
-          BRIDGE_REPO: ${{ github.workspace }}/../agentcontrol-bridge
+          BRIDGE_REPO: ${{ github.workspace }}/.deps/agentcontrol-bridge
           FRESH_BUILD: 'true'
         run: bash scripts/bundle-bridge.sh
 
