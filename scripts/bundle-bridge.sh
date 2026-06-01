@@ -14,6 +14,10 @@
 # so the bundled bridge matches the tray release tag.
 
 set -euo pipefail
+# Phase 39.11.3 — surface every shell command in CI logs so failures
+# narrow to a single line. The npm-audit noise hides the real exit
+# point otherwise (macOS tray-run-3 was unreadable without this).
+[ -n "${CI:-}" ] && set -x
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TRAY_ROOT="$(dirname "$SCRIPT_DIR")"
