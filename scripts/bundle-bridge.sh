@@ -86,6 +86,9 @@ else
   exit 1
 fi
 
-bytes=$(du -sb "$DEST" 2>/dev/null | cut -f1)
-mb=$(( bytes / 1024 / 1024 ))
-echo "✓ bundled bridge into $DEST (${mb} MB)"
+# Phase 39.11.4 — `du -sb` (GNU bytes flag) is not portable to BSD du
+# on macOS runners; it errored with exit code 64 and tanked the whole
+# script under `set -e`. `du -sh` is in POSIX and gives us a
+# human-readable size on every runner.
+size=$(du -sh "$DEST" 2>/dev/null | cut -f1 || echo "?")
+echo "✓ bundled bridge into $DEST (${size})"
