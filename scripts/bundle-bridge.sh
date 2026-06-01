@@ -60,15 +60,26 @@ if [ -f "$BRIDGE_REPO/src/db/schema.sql" ]; then
   cp "$BRIDGE_REPO/src/db/schema.sql" "$DEST/dist/db/schema.sql"
 fi
 
-# Bridge needs policy CSV + casbin model — shared/policy lives in a
-# sibling directory. Copy as a sibling of dist/ so casbinEngine.ts
-# resolves `../../../shared/policy/` correctly (after our 39.3 deploy
-# pattern this resolves to `<bridge>/shared/policy/`).
-SHARED_POLICY="$(dirname "$BRIDGE_REPO")/shared/policy"
-if [ -d "$SHARED_POLICY" ]; then
-  mkdir -p "$DEST/shared/policy"
-  cp "$SHARED_POLICY/model.conf" "$DEST/shared/policy/model.conf"
-  cp "$SHARED_POLICY/seed-policy.csv" "$DEST/shared/policy/seed-policy.csv"
+# Bridge needs policy CSV + casbin model. Phase 39.11.1 moved
+# shared/policy/ INSIDE the bridge repo so CI can find it.
+# Path-resolution trap (Phase 39.11.2): casbinEngine.ts resolves the
+# policy dir via `new URL('../../../shared/policy/', import.meta.url)`
+# relative to its own JS file. From `<root>/dist/policy/casbinEngine.js`
+# that lands at `<root>/shared/policy/` — meaning shared/ must be a
+# SIBLING of dist/, NOT a child of the bridge root. In Tauri-resources
+# terms: ship it at `Resources/shared/policy/` next to `Resources/bridge/`,
+# not at `Resources/bridge/shared/`. We write to `$DEST/../shared/policy/`
+# accordingly.
+SHARED_POLICY_SRC="$BRIDGE_REPO/shared/policy"
+SHARED_POLICY_DEST="$(dirname "$DEST")/shared/policy"
+if [ -d "$SHARED_POLICY_SRC" ]; then
+  rm -rf "$SHARED_POLICY_DEST"
+  mkdir -p "$SHARED_POLICY_DEST"
+  cp "$SHARED_POLICY_SRC/model.conf"      "$SHARED_POLICY_DEST/model.conf"
+  cp "$SHARED_POLICY_SRC/seed-policy.csv" "$SHARED_POLICY_DEST/seed-policy.csv"
+else
+  echo "✖ shared/policy not found under bridge repo ($SHARED_POLICY_SRC)" >&2
+  exit 1
 fi
 
 bytes=$(du -sb "$DEST" 2>/dev/null | cut -f1)

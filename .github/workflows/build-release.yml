@@ -127,24 +127,9 @@ jobs:
           path: .deps/agentcontrol-bridge
           token: ${{ secrets.BRIDGE_REPO_TOKEN }}
 
-      - name: Checkout sibling shared/policy
-        uses: actions/checkout@v4
-        with:
-          repository: MatthiasF999/agentcontrol-supabase
-          path: .deps/agentcontrol-supabase
-          sparse-checkout: |
-            shared/policy
-          sparse-checkout-cone-mode: false
-          token: ${{ secrets.BRIDGE_REPO_TOKEN }}
-
-      - name: Stage shared/policy next to bridge repo
-        shell: bash
-        run: |
-          # bundle-bridge.sh expects shared/policy as a sibling of the
-          # bridge checkout (mirrors the local-dev layout). Copy from
-          # the sparse-checkout into .deps/shared/policy.
-          mkdir -p .deps/shared
-          cp -r .deps/agentcontrol-supabase/shared/policy .deps/shared/policy
+      # shared/policy lives INSIDE the bridge repo now (commit
+      # [bridge/p39.11.1] moves it there from a local-only sibling).
+      # No separate supabase checkout required.
 
       - name: Bundle bridge into tray resources
         shell: bash
