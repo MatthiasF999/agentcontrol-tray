@@ -36,6 +36,16 @@ jobs:
       - name: Release gate — Add-43 + Add-44 (commit-content scan)
         run: bash scripts/check-release-gates.sh
 
+      # Phase 43 Add-25 — CHANGELOG.md must keep an `## [Unreleased]`
+      # section at the top so the release-planner has a landing spot
+      # for work-in-progress. Mirrors bridge ci.yml mandatory gate #5.
+      - name: Release gate — CHANGELOG Unreleased section (Add-25)
+        run: |
+          if ! grep -q '^## \[Unreleased\]' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md missing '## [Unreleased]' section"
+            exit 1
+          fi
+
   lint-build:
     runs-on: ubuntu-latest
     steps:
