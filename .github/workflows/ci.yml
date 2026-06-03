@@ -51,3 +51,29 @@ jobs:
       - run: pnpm run lint
       # `build` = tsc && vite build (per package.json).
       - run: pnpm run build
+
+  # Phase 37 Add-82 — doc-set updates enforced (promoted from supabase
+  # ci.yml). PR-only, only on `feat/phase-*` branches. Diff vs
+  # origin/main must touch at least one of `.claude/memory.md`,
+  # `docs/PHASE-*-SUMMARY.md`, `CLAUDE.md`, or `CHANGELOG.md`.
+  doc-set-gate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Phase 37 Add-82 — doc-set updates enforced (PR-only)
+        run: |
+          BRANCH="${GITHUB_HEAD_REF:-}"
+          if [[ ! "$BRANCH" =~ ^feat/phase- ]]; then
+            echo "branch '$BRANCH' is not a phase-iter branch — skipping doc-set gate"
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only origin/main...HEAD)
+          if echo "$CHANGED" | grep -qE '^(\.claude/memory\.md|docs/PHASE-.*-SUMMARY\.md|CLAUDE\.md|CHANGELOG\.md)$'; then
+            echo "doc-set updated: at least one of memory.md / phase summary / CLAUDE.md / CHANGELOG present in diff"
+            exit 0
+          fi
+          echo "::error::Phase-iter PR '$BRANCH' does not touch any of: .claude/memory.md, docs/PHASE-*-SUMMARY.md, CLAUDE.md, CHANGELOG.md"
+          exit 1
