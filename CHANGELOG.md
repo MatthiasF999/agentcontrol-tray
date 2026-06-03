@@ -15,6 +15,12 @@ when releases ship through the operator-portal.
 ## [Unreleased]
 
 ### Added
+- Phase 37 Add-82 — **`doc-set-gate` job** promoted from supabase
+  ci.yml to tray ci.yml. PR-only, only on `^feat/phase-` branches.
+  Diff vs origin/main must touch at least one of `.claude/memory.md`,
+  `docs/PHASE-*-SUMMARY.md`, `CLAUDE.md`, or `CHANGELOG.md`. Enforces
+  the doc-set protocol cross-repo.
+
 - biome + line-limits enforcement (`scripts/check-line-limits.mjs` +
   `biome.json`). New `pnpm lint` / `pnpm lint:fix` / `pnpm format`
   scripts; `pnpm check` chains `pnpm lint && pnpm tsc --noEmit` as the
