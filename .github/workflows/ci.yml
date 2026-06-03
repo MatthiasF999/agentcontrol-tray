@@ -1,0 +1,47 @@
+# ci.yml — Phase 37 release-gates + lint + build on every PR + main-push.
+#
+# Complements build-release.yml (tag-push + dispatch only).
+#
+# `build` includes `tsc && vite build` per package.json — covers
+# typecheck (Add-48) + Vite-build (analog Add-52 once a bundle-size
+# guard is wired). No `npm test` yet; per CLAUDE.md "Today tsc is
+# the only gate". Phase 37 follow-up: wire vitest in tray.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  release-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Phase 37 — release-gates scan origin/main..HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Add-43 + Add-44 — commit-content scan across origin/main..HEAD.
+      # Shared script implementation; see
+      # ../../../supabase/docs/PHASE-37-ARCHITECT-BLUEPRINT.md.
+      - name: Release gate — Add-43 + Add-44 (commit-content scan)
+        run: bash scripts/check-release-gates.sh
+
+  lint-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      # `build` = tsc && vite build (per package.json).
+      - run: npm run build
