@@ -35,8 +35,10 @@ fi
 
 echo "[release-gates] checking range: $RANGE"
 
-# Collect SHAs in range.
-mapfile -t SHAS < <(git rev-list "$RANGE")
+# Collect SHAs in range. `--no-merges` skips GitHub's synthetic merge
+# commit on PR builds (which has no Co-Authored-By trailer because it's
+# auto-generated, not authored by a human).
+mapfile -t SHAS < <(git rev-list --no-merges "$RANGE")
 if [ "${#SHAS[@]}" -eq 0 ]; then
   echo "[release-gates] no commits in range; trivially pass."
   exit 0
@@ -44,12 +46,10 @@ fi
 
 FAIL=0
 
-# Add-43 — Co-Authored-By trailer per-commit.
+# Add-43 — Co-Authored-By trailer per-commit. Case-insensitive because
+# Github squash-merge normalises `Co-Authored-By` → `Co-authored-by`.
 for sha in "${SHAS[@]}"; do
   body="$(git log -1 --format=%B "$sha")"
-  # Case-insensitive — Github squash-merge normalises the trailer to
-  # `Co-authored-by:` (lowercase) which the canonical Anthropic convention
-  # writes as `Co-Authored-By:`. Either is fine; only the value matters.
   if ! grep -qiE '^Co-Authored-By: Claude' <<<"$body"; then
     short="$(git log -1 --format=%h "$sha")"
     subject="$(git log -1 --format=%s "$sha")"
@@ -59,12 +59,24 @@ for sha in "${SHAS[@]}"; do
 done
 
 # Add-44 — no bypass flags in any commit body.
+#
+# Self-referential exemption: commits that DOCUMENT the gate (Phase 37
+# blueprint, this script, the workflow file) will mention the flag names
+# verbatim in their commit body. Such commits opt out by including
+# `release-gate-exempt: <reason>` on its own line in the body. The
+# exemption is tracked + auditable per commit; it is not a global escape
+# hatch.
 for sha in "${SHAS[@]}"; do
   body="$(git log -1 --format=%B "$sha")"
+  if grep -qiE '^release-gate-exempt:' <<<"$body"; then
+    short="$(git log -1 --format=%h "$sha")"
+    echo "[release-gates] commit $short exempt via 'release-gate-exempt:' trailer — skipping Add-44 check"
+    continue
+  fi
   if grep -E -- '(--no-verify|--no-gpg-sign|--remote)\b' <<<"$body" >/dev/null; then
     short="$(git log -1 --format=%h "$sha")"
     subject="$(git log -1 --format=%s "$sha")"
-    echo "::error::Add-44 — commit $short ($subject) body references a bypass flag (--no-verify / --no-gpg-sign / --remote)"
+    echo "::error::Add-44 — commit $short ($subject) body references a bypass flag (--no-verify / --no-gpg-sign / --remote). If documenting the gate, add 'release-gate-exempt: <reason>' on its own line."
     FAIL=1
   fi
 done

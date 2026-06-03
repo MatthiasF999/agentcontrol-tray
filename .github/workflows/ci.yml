@@ -25,7 +25,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
 
       # Add-43 + Add-44 — commit-content scan across origin/main..HEAD.
       # Shared script implementation; see
@@ -40,8 +43,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
       # `build` = tsc && vite build (per package.json).
-      - run: npm run build
+      - run: pnpm run build
