@@ -15,6 +15,13 @@ when releases ship through the operator-portal.
 ## [Unreleased]
 
 ### Added
+- Phase 43 Add-30 — **tray "About" CHANGELOG card** in SettingsScreen.
+  Shows the latest 2 versions inline (parsed in-app from a bundled
+  snapshot of /CHANGELOG.md, keep-a-changelog format). "Show all"
+  link routes to operator-portal Releases (Add-31, out of tray scope).
+  New `src/lib/changelog.ts` (pure parser, no deps) +
+  `src/lib/changelogBundled.ts` + `src/screens/AboutCard.tsx`.
+
 - Phase 43 Add-25 — **CHANGELOG Unreleased gate** wired into `release-gates`
   job in `.github/workflows/ci.yml`. Mirrors bridge ci.yml mandatory gate
   #5 — `CHANGELOG.md` must keep `## [Unreleased]` at the top so the
