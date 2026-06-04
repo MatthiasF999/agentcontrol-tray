@@ -3,6 +3,7 @@ import {
   requestPermission,
   sendNotification,
 } from '@tauri-apps/plugin-notification';
+import type { NavRoute } from './navigation';
 
 let _ensured: Promise<boolean> | null = null;
 
@@ -16,7 +17,16 @@ async function ensurePermission(): Promise<boolean> {
   return _ensured;
 }
 
-export async function notify(title: string, body: string): Promise<void> {
+/**
+ * Send an OS notification. When `route` is given, clicking the
+ * notification deep-links the tray to that view (Add-24, see
+ * ./navigation).
+ */
+export async function notify(
+  title: string,
+  body: string,
+  route?: NavRoute,
+): Promise<void> {
   if (!(await ensurePermission())) return;
-  sendNotification({ title, body });
+  sendNotification({ title, body, extra: route ? { route } : undefined });
 }
