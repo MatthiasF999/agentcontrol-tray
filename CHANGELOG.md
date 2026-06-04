@@ -15,6 +15,11 @@ when releases ship through the operator-portal.
 ## [Unreleased]
 
 ### Added
+- Phase 43 Add-25 — **CHANGELOG Unreleased gate** wired into `release-gates`
+  job in `.github/workflows/ci.yml`. Mirrors bridge ci.yml mandatory gate
+  #5 — `CHANGELOG.md` must keep `## [Unreleased]` at the top so the
+  release-planner has a landing spot for work-in-progress.
+
 - Phase 37 Add-82 — **`doc-set-gate` job** promoted from supabase
   ci.yml to tray ci.yml. PR-only, only on `^feat/phase-` branches.
   Diff vs origin/main must touch at least one of `.claude/memory.md`,
