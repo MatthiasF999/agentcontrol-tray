@@ -46,5 +46,5 @@ src/screens/ProcessInstancesScreen.tsx:107
 src/screens/QuickAddIdeaSheet.tsx:13
 src/screens/QuickPair.tsx:14
 src/screens/RecentTasksCard.tsx:28
-src/screens/SettingsScreen.tsx:18
+src/screens/SettingsScreen.tsx:19
 src/screens/UpdaterCard.tsx:8

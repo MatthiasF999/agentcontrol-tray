@@ -8,6 +8,7 @@ import {
   type UpdateChannel,
   useAppSettings,
 } from '../lib/appSettings';
+import { AboutCard } from './AboutCard';
 import { BridgesListCard } from './BridgesListCard';
 import { UpdaterCard } from './UpdaterCard';
 
@@ -186,6 +187,8 @@ export function SettingsScreen({ onBack }: Props) {
       />
 
       <UpdaterCard />
+
+      <AboutCard supabaseUrl={supabaseUrl} />
 
       <details className="card">
         <summary>Defaults reference</summary>
