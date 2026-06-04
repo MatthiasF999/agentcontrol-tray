@@ -66,12 +66,19 @@ never grows.
 
 ## Clean code (https://cln.co/) — the review rubric
 
+**Canonical rubric (Add-38):** the 7-principle definitions (SRP / SoC /
+DRY / KISS / YAGNI / LoD / DIP) live in the sibling `supabase` repo at
+`supabase/docs/AGENT-METHODOLOGY.md` §"Clean-Code rubric (cln.co)" —
+single source of truth across all four repos. The gloss below is the
+tray-specific reading.
+
 Every change is reviewed against CleanCode Principles. The ones that
 bite most here: **SRP** (one screen / hook, one reason to change),
 **SoC** (UI ≠ data-fetching ≠ Tauri-command glue), **DRY** (shared
-logic in `src/lib/` and `src/bridge/`), **KISS / YAGNI**, **LoD**,
-**DIP** (depend on `BridgeClient` / `SupabaseClient` interfaces, not
-their innards).
+logic in `src/lib/` and `src/bridge/`), **KISS / YAGNI**, **LoD** (the
+tray *reads* daemon + Supabase state, never re-derives it), **DIP**
+(depend on `BridgeClient` / `SupabaseClient` interfaces, not their
+innards).
 
 ## TypeScript
 
