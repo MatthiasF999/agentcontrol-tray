@@ -78,7 +78,7 @@ export function useRecentTasks(orgId: string | null): Hook {
             NOTIFY_SET.add(next.id);
             const preview =
               next.prompt !== null ? next.prompt.slice(0, 80) : 'Task';
-            void notify('AgentControl — approval required', preview);
+            void notify('AgentControl — approval required', preview, 'home');
           }
         },
       )

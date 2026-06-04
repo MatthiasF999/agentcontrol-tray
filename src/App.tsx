@@ -6,6 +6,11 @@ import { LoginScreen } from './auth/LoginScreen';
 import { BridgeClientProvider, useBridge } from './bridge/BridgeClientContext';
 import { usePairingStatus } from './bridge/usePairingStatus';
 import { useTraySync } from './bridge/useTraySync';
+import {
+  installNotificationRouting,
+  type NavRoute,
+  onNavigate,
+} from './lib/navigation';
 import { getSupabase } from './lib/supabase';
 import { BacklogConsumptionScreen } from './screens/BacklogConsumptionScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -14,7 +19,7 @@ import { ProcessInstancesScreen } from './screens/ProcessInstancesScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import './App.css';
 
-type View = 'home' | 'settings' | 'processes' | 'backlog';
+type View = NavRoute;
 
 function SignedInRouter() {
   useBridge();
@@ -22,6 +27,15 @@ function SignedInRouter() {
   const [view, setView] = useState<View>('home');
   const [backlogShowDigest, setBacklogShowDigest] = useState(false);
   useTraySync(status, error);
+
+  // Add-24 — route to the view named by a clicked OS notification.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void (async () => {
+      unlisten = await onNavigate((route) => setView(route));
+    })();
+    return () => unlisten?.();
+  }, []);
 
   function openBacklog(showDigest: boolean): void {
     setBacklogShowDigest(showDigest);
@@ -71,8 +85,10 @@ function Router() {
     void (async () => {
       unsubRef.current = await registerDeepLinkAuth(() => getSupabase());
     })();
+    const routingPromise = installNotificationRouting();
     return () => {
       unsubRef.current?.();
+      void routingPromise.then((unregister) => unregister());
     };
   }, []);
 

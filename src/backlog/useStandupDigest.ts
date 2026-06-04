@@ -26,7 +26,11 @@ async function maybeNotify(row: StandupTask): Promise<void> {
   if (row.state !== 'delivered') return;
   if (NOTIFIED.has(row.id)) return;
   NOTIFIED.add(row.id);
-  await notify('AgentControl — standup digest', summarize(row.digest_markdown));
+  await notify(
+    'AgentControl — standup digest',
+    summarize(row.digest_markdown),
+    'backlog',
+  );
 }
 
 export function useStandupDigest(orgId: string | null): Hook {

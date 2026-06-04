@@ -21,8 +21,8 @@ src/auth/LoginScreen.tsx:6
 # backlog/ — supabase channel subscribe + reducer hooks
 src/backlog/useBacklogItems.ts:32
 src/backlog/useBacklogItems.ts:39
-src/backlog/useStandupDigest.ts:32
-src/backlog/useStandupDigest.ts:39
+src/backlog/useStandupDigest.ts:36
+src/backlog/useStandupDigest.ts:43
 
 # bridge/ — supabase realtime + recent-tasks hooks
 src/bridge/useOrgsList.ts:22

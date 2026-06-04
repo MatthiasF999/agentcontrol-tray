@@ -9,7 +9,7 @@ use tauri::{
     include_image,
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
-    Manager, RunEvent, WindowEvent,
+    Emitter, Manager, RunEvent, WindowEvent,
 };
 
 const TRAY_ID: &str = "agentcontrol-main";
@@ -22,11 +22,19 @@ fn icon_for(state: &str) -> Image<'static> {
     }
 }
 
+/// Show + focus the main window, optionally deep-linking to a route.
+/// Add-24 — invoked from the OS-notification `onAction` bridge: when a
+/// notification carries `extra.route`, the JS side calls this with that
+/// route so focus + navigation happen atomically. The `navigate` event
+/// is consumed by the React router (see src/lib/navigation.ts).
 #[tauri::command]
-fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
+fn show_main_window(app: tauri::AppHandle, route: Option<String>) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("main") {
         win.show().map_err(|e| e.to_string())?;
         win.set_focus().map_err(|e| e.to_string())?;
+    }
+    if let Some(route) = route {
+        app.emit("navigate", route).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
