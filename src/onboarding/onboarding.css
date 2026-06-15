@@ -232,3 +232,17 @@ button.btn-primary {
   padding: 0;
   text-decoration: underline;
 }
+
+/* Dark mode — Windows + macOS + Linux respect `prefers-color-scheme`.
+   Override the CSS variables so onboarding text isn't dark-on-dark. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a;
+    --bg-elev: #1e293b;
+    --accent: #818cf8;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --border: #334155;
+  }
+}
+
