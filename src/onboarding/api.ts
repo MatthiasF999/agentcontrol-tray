@@ -1,8 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
-
-const PAIR_INSTALLER_URL = 'https://178.105.244.59/app/pair-bridge';
+import { PAIR_BRIDGE_URL } from '../config/hetzner';
 
 export type PairTokens = {
   refresh_token: string;
@@ -17,7 +16,7 @@ export function openPairInstallerSignIn(
 ): Promise<void> {
   // Param is "claim_code" not "code" — the operator-portal magic-link return URL
   // already carries GoTrue's PKCE ?code=, which would collide.
-  const url = `${PAIR_INSTALLER_URL}/?claim_code=${encodeURIComponent(code)}&label=${encodeURIComponent(label)}`;
+  const url = `${PAIR_BRIDGE_URL}/?claim_code=${encodeURIComponent(code)}&label=${encodeURIComponent(label)}`;
   return openUrl(url);
 }
 

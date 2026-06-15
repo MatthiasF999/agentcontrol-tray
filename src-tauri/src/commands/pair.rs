@@ -1,9 +1,9 @@
 use super::shell::{env_upsert, run_in_wsl_quiet};
+use crate::config;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
 
-const OPERATOR_PORTAL: &str = "https://178.105.244.59/operator/";
 const BRIDGE_DIR: &str = "$HOME/agentcontrol-bridge";
 
 #[derive(Clone, serde::Serialize)]
@@ -17,7 +17,7 @@ pub struct PairTokens {
 #[tauri::command]
 pub fn open_operator_portal(app: AppHandle) -> Result<(), String> {
     app.opener()
-        .open_url(OPERATOR_PORTAL, None::<&str>)
+        .open_url(config::operator_portal_url(), None::<&str>)
         .map_err(|e| e.to_string())
 }
 

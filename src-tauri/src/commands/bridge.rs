@@ -1,14 +1,15 @@
 use super::shell::{run_in_wsl, run_in_wsl_capture, CommandResult};
+use crate::config;
 use tauri::AppHandle;
 use tokio::time::{sleep, Duration};
 
-// Self-hosted tarball on the same Hetzner Caddy that serves /pair-installer.
+// Bridge tarball lives on the same Hetzner Caddy that serves /app/*.
 // The bridge repo is private, so GitHub's `archive/refs/heads/main.tar.gz`
-// endpoint would 404 without an auth header — and baking a token into the
-// installer is a non-starter. The tarball lives on the host's
-// `install/bridge.tar.gz` (gitignored in the supabase repo), refreshed out
-// of band when the bridge ships a new version.
-const TARBALL_URL: &str = "https://178.105.244.59/install/bridge.tar.gz";
+// endpoint would 404 without an auth header — baking a token into the
+// tray is a non-starter. The tarball lives on the host at
+// `/srv/install/bridge.tar.gz` (gitignored in the supabase repo), refreshed
+// out of band when the bridge ships a new version. URL host is configurable
+// via the `HETZNER_HOST` build-time env (see `crate::config`).
 const BRIDGE_DIR: &str = "$HOME/agentcontrol-bridge";
 
 #[tauri::command]
@@ -25,7 +26,7 @@ pub async fn download_bridge(
     let cmd = format!(
         "mkdir -p {dir} && curl -fsSLk {url} | tar -xz -C {dir} --strip-components=1",
         dir = BRIDGE_DIR,
-        url = TARBALL_URL,
+        url = config::bridge_tarball_url(),
     );
     run_in_wsl(app, distro, cmd, event_id).await
 }
