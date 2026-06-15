@@ -51,13 +51,15 @@ jobs:
             label: macos
             rust-target: aarch64-apple-darwin
             args: '--target aarch64-apple-darwin'
-          # Windows: build the raw .exe (no NSIS/MSI bundling). The
-          # post-step below uploads it as `*_x64-portable.exe` so users
-          # double-click and the app runs immediately — no install round-trip.
+          # Windows: NSIS bundle. The tray is a persistent menu-bar app
+          # (Tailscale-pattern), so the install step IS what we want —
+          # tray.exe lives in Programs Files + Start Menu, autoruns on
+          # login, persists. The "portable wizard" pattern only applied
+          # to the now-deprecated one-shot installer.
           - platform: windows-latest
             label: windows
             rust-target: x86_64-pc-windows-msvc
-            args: '--no-bundle'
+            args: ''
 
     runs-on: ${{ matrix.platform }}
 
@@ -175,37 +177,6 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
-
-      # Portable Windows .exe: tauri-action with --no-bundle compiles the
-      # raw exe but doesn't ship it. Upload it as a release asset so users
-      # double-click and the app runs immediately (no install step).
-      - name: Upload portable Windows .exe
-        if: matrix.platform == 'windows-latest' && github.event_name == 'push'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          SRC="src-tauri/target/release/agentcontrol-tray.exe"
-          DEST="AgentControl-Tray_${VERSION}_x64-portable.exe"
-          cp "$SRC" "$DEST"
-          gh release upload "$GITHUB_REF_NAME" "$DEST" --clobber
-
-      # Portable macOS .app: ship the raw bundle inside a .zip instead of a
-      # .dmg, so users skip the disk-image-mount + drag-to-Applications
-      # round-trip. `ditto -c -k --keepParent` preserves the .app's HFS+
-      # metadata + symlinks, which a plain `zip -r` would mangle.
-      - name: Upload portable macOS .app.zip
-        if: matrix.platform == 'macos-14' && github.event_name == 'push'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          APP_DIR="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/agentcontrol-tray.app"
-          DEST="AgentControl-Tray_${VERSION}_aarch64-portable.app.zip"
-          ditto -c -k --keepParent "$APP_DIR" "$DEST"
-          gh release upload "$GITHUB_REF_NAME" "$DEST" --clobber
 
       - name: Upload artifacts (raw, for non-release runs)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version == ''
