@@ -51,10 +51,13 @@ jobs:
             label: macos
             rust-target: aarch64-apple-darwin
             args: '--target aarch64-apple-darwin'
+          # Windows: build the raw .exe (no NSIS/MSI bundling). The
+          # post-step below uploads it as `*_x64-portable.exe` so users
+          # double-click and the app runs immediately — no install round-trip.
           - platform: windows-latest
             label: windows
             rust-target: x86_64-pc-windows-msvc
-            args: ''
+            args: '--no-bundle'
 
     runs-on: ${{ matrix.platform }}
 
@@ -111,32 +114,10 @@ jobs:
       - name: Install web deps
         run: pnpm install --frozen-lockfile --prefer-offline
 
-      # Phase 39.11 — bundle the bridge as a Tauri resource so the
-      # tray installer ships a working bridge alongside the GUI. We
-      # check out the sibling agentcontrol-bridge repo, build it, and
-      # the bundle-bridge.sh script copies dist/ + node_modules/ +
-      # shared/policy/ into src-tauri/bridge/ (referenced by
-      # tauri.conf.json bundle.resources).
-      # actions/checkout refuses paths outside $GITHUB_WORKSPACE so we
-      # stage the sibling repos INSIDE the workspace under .deps/ and
-      # tell bundle-bridge.sh where they ended up via env.
-      - name: Checkout sibling bridge repo
-        uses: actions/checkout@v4
-        with:
-          repository: MatthiasF999/agentcontrol-bridge
-          path: .deps/agentcontrol-bridge
-          token: ${{ secrets.BRIDGE_REPO_TOKEN }}
-
-      # shared/policy lives INSIDE the bridge repo now (commit
-      # [bridge/p39.11.1] moves it there from a local-only sibling).
-      # No separate supabase checkout required.
-
-      - name: Bundle bridge into tray resources
-        shell: bash
-        env:
-          BRIDGE_REPO: ${{ github.workspace }}/.deps/agentcontrol-bridge
-          FRESH_BUILD: 'true'
-        run: bash scripts/bundle-bridge.sh
+      # Phase 55.3.0 — the bridge is no longer bundled as a Tauri
+      # resource. The folded-in onboarding flow installs it (WSL + Ubuntu
+      # + Node + Claude CLI + systemctl --user service) on first run, so
+      # there is no sibling-repo checkout or bundle-bridge.sh step here.
 
       # Sync the version field in tauri.conf.json + package.json with the
       # git tag (or workflow_dispatch input). Single source of truth: the
@@ -186,6 +167,37 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      # Portable Windows .exe: tauri-action with --no-bundle compiles the
+      # raw exe but doesn't ship it. Upload it as a release asset so users
+      # double-click and the app runs immediately (no install step).
+      - name: Upload portable Windows .exe
+        if: matrix.platform == 'windows-latest' && github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SRC="src-tauri/target/release/agentcontrol-tray.exe"
+          DEST="AgentControl-Tray_${VERSION}_x64-portable.exe"
+          cp "$SRC" "$DEST"
+          gh release upload "$GITHUB_REF_NAME" "$DEST" --clobber
+
+      # Portable macOS .app: ship the raw bundle inside a .zip instead of a
+      # .dmg, so users skip the disk-image-mount + drag-to-Applications
+      # round-trip. `ditto -c -k --keepParent` preserves the .app's HFS+
+      # metadata + symlinks, which a plain `zip -r` would mangle.
+      - name: Upload portable macOS .app.zip
+        if: matrix.platform == 'macos-14' && github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          APP_DIR="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/agentcontrol-tray.app"
+          DEST="AgentControl-Tray_${VERSION}_aarch64-portable.app.zip"
+          ditto -c -k --keepParent "$APP_DIR" "$DEST"
+          gh release upload "$GITHUB_REF_NAME" "$DEST" --clobber
 
       - name: Upload artifacts (raw, for non-release runs)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version == ''

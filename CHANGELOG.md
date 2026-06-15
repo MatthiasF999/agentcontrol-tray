@@ -15,6 +15,23 @@ when releases ship through the operator-portal.
 ## [Unreleased]
 
 ### Added
+- Phase 55.3.0 — **folded the standalone bridge installer into the tray.**
+  First-run onboarding (WSL2 + Ubuntu + system deps + Node 22 + Claude
+  Code CLI + git config + bridge download/build + `.env` + pairing) now
+  runs inside the tray (`src/onboarding/`), gated on a persisted
+  `bridge.setup.done.v1` flag. New Tauri commands ported from the
+  installer under `src-tauri/src/commands/`.
+
+### Changed
+- Phase 55.3.0 — **bridge now runs as a `systemctl --user` service**
+  (WSL on Windows, native on Linux) instead of a tray-child process.
+  Quitting the tray no longer stops the bridge (Tailscale pattern).
+  `BridgeSupervisor` drives start/stop/restart/status via systemctl.
+- Phase 55.3.0 — **dropped the bundled bridge** (`bundle.resources` +
+  `bundle-bridge.sh`); tray bundles are dramatically smaller. Release
+  artifacts are now one portable file per platform (AppImage / portable
+  `.exe` / `.app.zip`); Windows builds with `--no-bundle`.
+
 - Phase 43 Add-30 — **tray "About" CHANGELOG card** in SettingsScreen.
   Shows the latest 2 versions inline (parsed in-app from a bundled
   snapshot of /CHANGELOG.md, keep-a-changelog format). "Show all"

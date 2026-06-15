@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ConfigScreen } from './auth/ConfigScreen';
 import { registerDeepLinkAuth } from './auth/deepLinkHandler';
@@ -11,7 +11,9 @@ import {
   type NavRoute,
   onNavigate,
 } from './lib/navigation';
+import { settings } from './lib/storage';
 import { getSupabase } from './lib/supabase';
+import { OnboardingFlow } from './onboarding/OnboardingFlow';
 import { BacklogConsumptionScreen } from './screens/BacklogConsumptionScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { PairScreen } from './screens/PairScreen';
@@ -104,7 +106,36 @@ function Router() {
   return <SignedInRouter />;
 }
 
+// Phase 55.3.0 — first-run gate. Before the bridge is set up (WSL +
+// Ubuntu + Node + Claude CLI + bridge service), route to the onboarding
+// flow folded in from the standalone installer. Once Done, persist the
+// flag and fall through to the normal auth + main UI.
+const SETUP_DONE_KEY = 'bridge.setup.done.v1';
+
+function useOnboardingGate() {
+  const [done, setDone] = useState<boolean | null>(null);
+  useEffect(() => {
+    void settings.get<boolean>(SETUP_DONE_KEY).then((v) => setDone(v === true));
+  }, []);
+  const complete = useCallback(() => {
+    void settings.set(SETUP_DONE_KEY, true);
+    setDone(true);
+  }, []);
+  return { done, complete };
+}
+
 export default function App() {
+  const { done, complete } = useOnboardingGate();
+
+  if (done === null) {
+    return (
+      <main className="container narrow center">
+        <p className="muted">Loading…</p>
+      </main>
+    );
+  }
+  if (!done) return <OnboardingFlow onComplete={complete} />;
+
   return (
     <AuthProvider>
       <BridgeClientProvider>

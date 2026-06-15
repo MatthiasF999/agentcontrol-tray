@@ -1,16 +1,17 @@
-mod bridge_supervisor;
+mod commands;
 mod docker;
 
 use std::sync::Arc;
 
-use bridge_supervisor::BridgeSupervisor;
+use commands::bridge_supervisor::BridgeSupervisor;
 use tauri::{
     image::Image,
     include_image,
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager, RunEvent, WindowEvent,
+    Emitter, Manager, WindowEvent,
 };
+use tauri_plugin_deep_link::DeepLinkExt;
 
 const TRAY_ID: &str = "agentcontrol-main";
 
@@ -65,13 +66,24 @@ fn bridge_status(app: tauri::AppHandle) -> Result<(String, Option<String>), Stri
     }
 }
 
-/// Phase 39.11 — restart the bridge child (after env edits or Node
-/// install). Tray menu wires "Restart bridge" to this.
+/// Phase 55.3.0 — start the bridge `systemctl --user` service.
 #[tauri::command]
-fn bridge_restart(app: tauri::AppHandle) -> Result<u32, String> {
-    let supervisor = app.state::<Arc<BridgeSupervisor>>();
-    supervisor.kill();
-    supervisor.spawn(&app)
+fn bridge_start(app: tauri::AppHandle) -> Result<(), String> {
+    app.state::<Arc<BridgeSupervisor>>().start()
+}
+
+/// Phase 55.3.0 — restart the bridge service (after env edits or pairing).
+/// Tray menu wires "Restart bridge" to this.
+#[tauri::command]
+fn bridge_restart(app: tauri::AppHandle) -> Result<(), String> {
+    app.state::<Arc<BridgeSupervisor>>().restart()
+}
+
+/// Phase 55.3.0 — stop the bridge service from the React UI.
+#[tauri::command]
+fn bridge_stop(app: tauri::AppHandle) -> Result<(), String> {
+    app.state::<Arc<BridgeSupervisor>>().stop();
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -101,20 +113,28 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
-            // Phase 39.11 — bring up the bridge child as soon as the
-            // tray boots. Failures are non-fatal: we surface them in
-            // the menu so the user can install Node + retry. The
-            // supervisor is shared as managed state so React + menu
+            // Phase 55.3.0 — forward `agentcontrol-tray://pair?…` deep
+            // links from the operator portal into the onboarding flow.
+            #[cfg(desktop)]
+            let _ = app.deep_link().register_all();
+            let handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                for url in event.urls() {
+                    commands::pair::emit_pair_tokens(&handle, &url);
+                }
+            });
+
+            // Phase 55.3.0 — the bridge runs as a systemctl --user service
+            // (WSL on Windows, native on Linux). Ask it to start on tray
+            // boot; idempotent + non-fatal. Failures (e.g. WSL/onboarding
+            // not done yet) surface in the menu and the onboarding flow.
+            // The supervisor is shared as managed state so React + menu
             // handlers can both query / restart.
             let supervisor: Arc<BridgeSupervisor> = Arc::new(BridgeSupervisor::new());
             app.manage(supervisor.clone());
-            match supervisor.spawn(&app.handle()) {
-                Ok(pid) => {
-                    eprintln!("[tray] bridge spawned pid={pid}");
-                }
-                Err(err) => {
-                    eprintln!("[tray] bridge spawn failed: {err}");
-                }
+            match supervisor.start() {
+                Ok(()) => eprintln!("[tray] bridge service started"),
+                Err(err) => eprintln!("[tray] bridge service start failed: {err}"),
             }
 
             let show_item = MenuItem::with_id(app, "show", "Open AgentControl", true, None::<&str>)?;
@@ -137,9 +157,8 @@ pub fn run() {
                     }
                     "restart_bridge" => {
                         let supervisor = app.state::<Arc<BridgeSupervisor>>();
-                        supervisor.kill();
-                        match supervisor.spawn(app) {
-                            Ok(pid) => eprintln!("[tray] bridge restarted pid={pid}"),
+                        match supervisor.restart() {
+                            Ok(()) => eprintln!("[tray] bridge service restarted"),
                             Err(err) => eprintln!("[tray] bridge restart failed: {err}"),
                         }
                     }
@@ -174,19 +193,38 @@ pub fn run() {
             show_main_window,
             update_tray_status,
             bridge_status,
+            bridge_start,
             bridge_restart,
+            bridge_stop,
             docker::docker_available,
             docker::docker_compose,
+            commands::wsl::detect_wsl,
+            commands::wsl::install_wsl,
+            commands::ubuntu::detect_ubuntu,
+            commands::ubuntu::install_ubuntu,
+            commands::shell::run_in_wsl,
+            commands::deps::apt_install_deps,
+            commands::deps::install_node22,
+            commands::deps::install_claude_cli,
+            commands::git_cfg::configure_git,
+            commands::git_cfg::read_git_config,
+            commands::bridge::download_bridge,
+            commands::bridge::npm_install_bridge,
+            commands::bridge::npm_run_build_bridge,
+            commands::bridge::wait_for_claim_code,
+            commands::api_key::generate_api_key,
+            commands::api_key::write_env_file,
+            commands::oauth::open_claude_oauth,
+            commands::oauth::poll_claude_creds,
+            commands::pair::open_operator_portal,
+            commands::pair::write_pair_env,
+            commands::system::get_machine_label,
+            commands::systemd::install_systemd_service,
+            commands::systemd::restart_bridge_service,
         ])
-        .build(tauri::generate_context!())
-        .expect("error while building tauri application")
-        // Phase 39.11 — clean shutdown of the bridge child on app
-        // exit. `.run` + `on_run_event` give us a hook into the event
-        // loop so we kill the supervisor before the process tears down.
-        .run(|app_handle, event| {
-            if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {
-                let supervisor = app_handle.state::<Arc<BridgeSupervisor>>();
-                supervisor.kill();
-            }
-        });
+        // Phase 55.3.0 — the bridge is now a systemctl --user service that
+        // outlives the tray (Tailscale pattern). Quitting the tray must NOT
+        // stop the bridge, so there is no longer a kill-on-exit hook.
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }
