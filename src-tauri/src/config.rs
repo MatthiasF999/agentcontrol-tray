@@ -6,7 +6,16 @@
 const DEFAULT_HOST: &str = "178.105.244.59";
 
 pub fn hetzner_host() -> &'static str {
-    option_env!("HETZNER_HOST").unwrap_or(DEFAULT_HOST)
+    // `option_env!()` returns `Some("")` when the env var is set but empty
+    // (e.g. GH Actions `${{ vars.HETZNER_HOST }}` when the repo variable
+    // isn't configured). Bare `unwrap_or` would treat that as "set" and
+    // fall through to building URLs like `https:///install/...`, which
+    // curl resolves to host `install` → "Could not resolve host" at the
+    // bridge-source step. Filter empty explicitly.
+    match option_env!("HETZNER_HOST") {
+        Some(h) if !h.is_empty() => h,
+        _ => DEFAULT_HOST,
+    }
 }
 
 /// `https://<host>` — bridge env writer + tarball download root.
