@@ -28,6 +28,11 @@ tauri-plugin-store = "2.4.3"
 tauri-plugin-deep-link = "2.4.9"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
+# Phase 55.3.0 — folded-in installer commands (WSL onboarding flow).
+url = "2"
+rand = "0.8"
+hex = "0.4"
+tokio = { version = "1", features = ["process", "io-util", "rt", "macros", "time"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2.4.2"
