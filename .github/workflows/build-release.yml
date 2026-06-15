@@ -152,6 +152,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Phase 55.4 — bake the deployment host into the bundle so the
+          # same tray binary can target a different self-hosted Caddy
+          # without code surgery. TS side reads `import.meta.env.VITE_*`;
+          # Rust side reads `option_env!("HETZNER_HOST")`. Both fall back
+          # to `178.105.244.59` (this user's CX23) if unset, so the
+          # default build keeps working without secrets configured.
+          HETZNER_HOST: ${{ vars.HETZNER_HOST }}
+          VITE_HETZNER_HOST: ${{ vars.HETZNER_HOST }}
         with:
           # tagName / releaseName / releaseBody used only when this action
           # creates the release. We rely on push-tag triggering creating

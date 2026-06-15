@@ -1,9 +1,9 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useState } from 'react';
+import { OPERATOR_DOWNLOAD_URL, OPERATOR_URL } from '../../config/hetzner';
 import type { ScreenProps } from '../state';
 
-const OPERATOR_URL = 'https://178.105.244.59/operator';
-const APP_URL = 'https://178.105.244.59/operator/download';
+const APP_URL = OPERATOR_DOWNLOAD_URL;
 
 function DoneLinks() {
   return (

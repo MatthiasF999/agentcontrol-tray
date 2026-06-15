@@ -1,4 +1,5 @@
 mod commands;
+mod config;
 mod docker;
 
 use std::sync::Arc;
