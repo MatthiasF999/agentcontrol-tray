@@ -47,7 +47,7 @@ pub async fn install_systemd_service(
 pub async fn restart_bridge_service(distro: String) -> Result<(), String> {
     run_in_wsl_quiet(&distro, "systemctl --user restart agentcontrol-bridge").await?;
     let probe = "sleep 3; for _ in $(seq 1 15); do \
-                 code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/health || true); \
+                 code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3001/health || true); \
                  if [ \"$code\" = \"200\" ]; then exit 0; fi; sleep 2; done; exit 1";
     let result = run_in_wsl_quiet(&distro, probe).await?;
     if result.exit_code == 0 {

@@ -28,6 +28,11 @@ pub fn generate_api_key() -> String {
 ///     so the bridge can reach the bridge-claim edge function on boot
 ///   - set `NODE_TLS_REJECT_UNAUTHORIZED=0` so Node accepts the Caddy
 ///     internal cert (TODO: ship the CA + use `NODE_EXTRA_CA_CERTS` instead)
+///   - set `PORT=3001` — tray's `bridgeClient` + `systemd::restart_bridge_service`
+///     health-probe both target localhost:3001. The bridge's bundled
+///     `.env.example` defaults to 3000 (matching its dev / Docker
+///     defaults), so we override here so the new systemd-installed
+///     instance lands on the port the tray actually queries.
 #[tauri::command]
 pub async fn write_env_file(
     distro: String,
@@ -38,12 +43,13 @@ pub async fn write_env_file(
     let cmd = format!(
         "cd {BRIDGE_DIR} && cp -n .env.example .env && \
          sed -i \"s|{PLACEHOLDER}|$(printf %s {key})|\" .env && \
-         {} && {} && {} && {} && {}",
+         {} && {} && {} && {} && {} && {}",
         env_upsert("CLAUDE_HOME", &claude_home),
         env_upsert("SUPABASE_URL", SUPABASE_URL),
         env_upsert("SUPABASE_FUNCTIONS_URL", SUPABASE_FUNCTIONS_URL),
         env_upsert("SUPABASE_ANON_KEY", SUPABASE_ANON_KEY),
         env_upsert("NODE_TLS_REJECT_UNAUTHORIZED", "0"),
+        env_upsert("PORT", "3001"),
     );
     let result = run_in_wsl_quiet(&distro, &cmd).await?;
     if result.exit_code == 0 {
