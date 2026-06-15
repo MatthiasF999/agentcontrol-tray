@@ -13,6 +13,11 @@ import {
 } from './lib/navigation';
 import { settings } from './lib/storage';
 import { getSupabase } from './lib/supabase';
+import {
+  listenForPairTokens,
+  restartBridgeService,
+  writePairEnv,
+} from './onboarding/api';
 import { OnboardingFlow } from './onboarding/OnboardingFlow';
 import { BacklogConsumptionScreen } from './screens/BacklogConsumptionScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -124,8 +129,46 @@ function useOnboardingGate() {
   return { done, complete };
 }
 
+// Distro the bridge was installed into during onboarding. Cached here so
+// the global pair-tokens listener can write the env without re-asking.
+const DISTRO_KEY = 'bridge.distro.v1';
+
+/**
+ * Global pair-tokens listener. Mounted at App-level so a deep-link from
+ * the operator-portal `/app/pair-bridge` page reaches the tray regardless
+ * of whether the user has the SignIn onboarding screen open at the time.
+ * On receive: write the env, restart the bridge, mark onboarding done →
+ * tray auto-transitions to the main UI.
+ */
+function useGlobalPairListener(onPaired: () => void) {
+  useEffect(() => {
+    let mounted = true;
+    const unlisten = listenForPairTokens(async (tokens) => {
+      const distro = (await settings.get<string>(DISTRO_KEY)) ?? 'Ubuntu-22.04';
+      try {
+        await writePairEnv(
+          distro,
+          tokens.refresh_token,
+          tokens.bridge_id,
+          tokens.org_id,
+          tokens.lan_api_key,
+        );
+        await restartBridgeService(distro);
+        if (mounted) onPaired();
+      } catch (err) {
+        console.warn('[pair] global listener failed', err);
+      }
+    });
+    return () => {
+      mounted = false;
+      void unlisten.then((fn) => fn());
+    };
+  }, [onPaired]);
+}
+
 export default function App() {
   const { done, complete } = useOnboardingGate();
+  useGlobalPairListener(complete);
 
   if (done === null) {
     return (
