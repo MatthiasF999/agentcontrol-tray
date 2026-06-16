@@ -52,31 +52,33 @@ pub async fn npm_run_build_bridge(
     run_in_wsl(app, distro, cmd, event_id).await
 }
 
-/// Poll the bridge journal for the one-time claim code (`AB12-CD34`).
+/// Ask the running bridge for its current pairing claim code via the local
+/// HTTP `/pair` endpoint.
 ///
-/// The bridge mints a code with a 10-minute TTL the first time it boots
-/// without a stored token. If the SignIn screen is reached more than a
-/// few minutes later (e.g. user re-runs the installer), the original
-/// code is already expired and we need a fresh one — so this function
-/// kicks `systemctl --user restart` first to force the bridge through
-/// the bootCloudMode path again. After the restart we look at the last
-/// 10 minutes of journal to give the bootstrap room and to forgive a
-/// slow first request.
+/// Earlier revisions force-restarted the bridge here + grepped the
+/// journal. That created a feedback loop with systemd `Restart=always`:
+/// each bridge boot fires one `bridge-claim` call, the rate limiter on
+/// the Supabase edge function caps that machine at ~5/min, and any
+/// extra restart (from this function, from the user reopening the
+/// onboarding wizard, or from a downstream startup failure) hits the
+/// limit → 429 → no new claim code → tray polls forever, restarts
+/// again, repeat.
+///
+/// Instead: the bridge already exposes `GET /pair` (the legacy LAN
+/// pairing UI's data source). It returns the active claim code if the
+/// bridge is unpaired, plus expiry. Poll that — no restart, no
+/// journal grep, no rate-limit cascade.
 #[tauri::command]
 pub async fn wait_for_claim_code(distro: String) -> Result<String, String> {
-    let _ = run_in_wsl_capture(
-        &distro,
-        "systemctl --user restart agentcontrol-bridge 2>&1 || true",
-    )
-    .await;
-    let cmd = "journalctl --user -u agentcontrol-bridge --since '10 minutes ago' \
-               --no-pager 2>/dev/null | grep -oE '[A-Z0-9]{4}-[A-Z0-9]{4}' | tail -1";
+    let probe = "curl -fsS http://127.0.0.1:3001/pair 2>/dev/null | \
+                 grep -oE '\"code\"[[:space:]]*:[[:space:]]*\"[A-Z0-9]{4}-[A-Z0-9]{4}\"' | \
+                 grep -oE '[A-Z0-9]{4}-[A-Z0-9]{4}' | tail -1";
     for _ in 0..30 {
-        let out = run_in_wsl_capture(&distro, cmd).await?;
+        let out = run_in_wsl_capture(&distro, probe).await?;
         if !out.is_empty() {
             return Ok(out);
         }
         sleep(Duration::from_secs(1)).await;
     }
-    Err("no claim code found in bridge logs within 30s".to_string())
+    Err("bridge did not expose a claim code on /pair within 30s".to_string())
 }
