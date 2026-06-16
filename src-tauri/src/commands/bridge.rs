@@ -52,6 +52,22 @@ pub async fn npm_run_build_bridge(
     run_in_wsl(app, distro, cmd, event_id).await
 }
 
+/// Query the bridge's `/pair` endpoint and return a one-word summary:
+/// `"paired"`, `"unpaired"`, `"expired"`, or `"unreachable"`. Used by the
+/// onboarding gate to skip the wizard when the bridge is already wired up.
+#[tauri::command]
+pub async fn bridge_pair_state(distro: String) -> Result<String, String> {
+    let probe = "curl -fsS http://127.0.0.1:3001/pair 2>/dev/null | \
+                 grep -oE '\"state\"[[:space:]]*:[[:space:]]*\"[a-z]+\"' | \
+                 grep -oE '[a-z]+' | tail -1";
+    let out = run_in_wsl_capture(&distro, probe).await?;
+    Ok(if out.is_empty() {
+        "unreachable".to_string()
+    } else {
+        out
+    })
+}
+
 /// Ask the running bridge for its current pairing claim code via the local
 /// HTTP `/pair` endpoint.
 ///

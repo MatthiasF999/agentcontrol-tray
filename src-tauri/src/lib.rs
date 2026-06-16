@@ -213,6 +213,7 @@ pub fn run() {
             commands::bridge::npm_install_bridge,
             commands::bridge::npm_run_build_bridge,
             commands::bridge::wait_for_claim_code,
+            commands::bridge::bridge_pair_state,
             commands::api_key::generate_api_key,
             commands::api_key::write_env_file,
             commands::oauth::open_claude_oauth,
