@@ -54,12 +54,19 @@ pub async fn npm_run_build_bridge(
 
 /// Query the bridge's `/pair` endpoint and return a one-word summary:
 /// `"paired"`, `"unpaired"`, `"expired"`, or `"unreachable"`. Used by the
-/// onboarding gate to skip the wizard when the bridge is already wired up.
+/// onboarding gate to skip the wizard when the bridge is already wired
+/// up. Discovers the distro internally via `detect_ubuntu()` — the
+/// onboarding flow doesn't persist its chosen distro, and falling back
+/// to the seed value `"Ubuntu-22.04"` mis-targets users on
+/// `Ubuntu` / `Ubuntu-24.04` / `Debian` / etc.
 #[tauri::command]
-pub async fn bridge_pair_state(distro: String) -> Result<String, String> {
+pub async fn bridge_pair_state() -> Result<String, String> {
+    let Some(distro) = super::ubuntu::detect_ubuntu() else {
+        return Ok("unreachable".to_string());
+    };
     let probe = "curl -fsS http://127.0.0.1:3001/pair 2>/dev/null | \
                  grep -oE '\"state\"[[:space:]]*:[[:space:]]*\"[a-z]+\"' | \
-                 grep -oE '[a-z]+' | tail -1";
+                 grep -oE '\"[a-z]+\"$' | tr -d '\"' | tail -1";
     let out = run_in_wsl_capture(&distro, probe).await?;
     Ok(if out.is_empty() {
         "unreachable".to_string()
