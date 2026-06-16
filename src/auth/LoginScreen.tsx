@@ -4,7 +4,7 @@ import { useAuth } from './AuthContext';
 const AUTH_CALLBACK = 'agentcontrol-tray://auth-callback';
 
 export function LoginScreen() {
-  const { signInWithMagicLink, supabaseUrl, resetConfig } = useAuth();
+  const { signInWithMagicLink } = useAuth();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +46,7 @@ export function LoginScreen() {
       <header className="brand">
         <h1>Sign in</h1>
         <p className="muted">
-          Connected to <code className="endpoint">{supabaseUrl ?? '—'}</code>
+          Sign in with the email on your AgentControl account.
         </p>
       </header>
       <form className="form" onSubmit={onSubmit}>
@@ -66,9 +66,6 @@ export function LoginScreen() {
           {busy ? 'Sending…' : 'Send magic link'}
         </button>
       </form>
-      <button type="button" className="link" onClick={() => void resetConfig()}>
-        Use a different Supabase instance
-      </button>
     </main>
   );
 }
