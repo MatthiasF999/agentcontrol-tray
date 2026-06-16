@@ -11,7 +11,12 @@ Type=simple
 WorkingDirectory=%h/agentcontrol-bridge
 ExecStart=/usr/bin/env npm start
 Restart=always
-RestartSec=5
+# 30s instead of 5s. The bridge calls `bridge-claim` once per cold boot
+# and the edge function rate-limits per machine_fp (~5/min); a 5s gap
+# would hit the limit within one minute of crash-looping. 30s keeps us
+# well inside the bucket while still recovering "quickly enough" from
+# a transient failure (network blip, supabase restart).
+RestartSec=30
 
 [Install]
 WantedBy=default.target
