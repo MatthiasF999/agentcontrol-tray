@@ -121,31 +121,23 @@ const SETUP_DONE_KEY = 'bridge.setup.done.v1';
 function useOnboardingGate() {
   const [done, setDone] = useState<boolean | null>(null);
   useEffect(() => {
+    void settings.get<boolean>(SETUP_DONE_KEY).then((v) => setDone(v === true));
+    // Background probe — does NOT block the first paint. WSL cold-start
+    // for the `/pair` probe takes 5-30s and was blocking the entire
+    // tray window + icon from appearing in v0.3.6. Show whatever the
+    // persisted flag says immediately; if the probe later finds the
+    // bridge already paired, flip the flag in the background and the
+    // gate re-renders into the main UI.
     void (async () => {
-      const persisted = await settings.get<boolean>(SETUP_DONE_KEY);
-      if (persisted === true) {
-        setDone(true);
-        return;
-      }
-      // Persisted flag absent — the user installed the tray fresh, or
-      // wiped its state. But the bridge may already be paired from a
-      // previous install (bridge-token.json on disk + supabase row
-      // intact). Probe the bridge's `/pair` endpoint; if it reports
-      // `paired`, mark the gate done immediately so the wizard doesn't
-      // try to mint a fresh claim code on top of a working bridge
-      // (which surfaced as "bridge did not expose a claim code on
-      // /pair within 30s" in v0.3.4).
       try {
         const state = await bridgePairState();
         if (state === 'paired') {
           await settings.set(SETUP_DONE_KEY, true);
           setDone(true);
-          return;
         }
       } catch {
-        // Bridge unreachable — fall through to onboarding as usual.
+        // Bridge unreachable — leave the persisted flag in charge.
       }
-      setDone(false);
     })();
   }, []);
   const complete = useCallback(() => {
