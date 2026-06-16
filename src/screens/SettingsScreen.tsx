@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function SettingsScreen({ onBack }: Props) {
-  const { session, supabaseUrl, resetConfig, signOut } = useAuth();
+  const { session, supabaseUrl, signOut } = useAuth();
   const { values, loading, update, reset } = useAppSettings();
   const bridge = useBridge();
   const { status } = usePairingStatus();
@@ -73,13 +73,6 @@ export function SettingsScreen({ onBack }: Props) {
         <div className="form" style={{ marginTop: 12 }}>
           <button type="button" onClick={() => void signOut()}>
             Sign out
-          </button>
-          <button
-            type="button"
-            className="link"
-            onClick={() => void resetConfig()}
-          >
-            Disconnect from Supabase
           </button>
         </div>
       </section>

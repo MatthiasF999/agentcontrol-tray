@@ -1,44 +1,26 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { settings, supabaseStorageAdapter } from './storage';
+import { BASE_URL } from '../config/hetzner';
+import { supabaseStorageAdapter } from './storage';
 
-const URL_KEY = 'supabase.url';
-const ANON_KEY_KEY = 'supabase.anon_key';
+// AgentControl is a hosted product: app + tray + bridge all talk to the
+// same operator-managed Supabase on Hetzner. Users don't have a personal
+// Supabase to point at — wiring URL + anonKey through a "Connect" screen
+// was a leftover from the early "BYO Supabase" prototype. Hard-code the
+// values (override at build time via the env vars consumed by
+// `config/hetzner.ts`).
+//
+// The anon JWT is `role=anon` — it ships in every web bundle by design;
+// RLS does the load-bearing isolation server-side, the anon key only
+// grants the routes the user could already hit unauthenticated.
+const SUPABASE_URL = BASE_URL;
+const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgwMjcxNDM2LCJleHAiOjIwOTU2MzE0MzZ9.X6qsRCvwhSg-dAQVQd188B8YoE1fZPi8I07nDnmww2A';
 
 let _client: SupabaseClient | null = null;
-let _currentUrl: string | null = null;
 
-export async function getStoredSupabaseConfig(): Promise<{
-  url: string;
-  anonKey: string;
-} | null> {
-  const url = await settings.get<string>(URL_KEY);
-  const anonKey = await settings.get<string>(ANON_KEY_KEY);
-  if (url === null || anonKey === null) return null;
-  return { url, anonKey };
-}
-
-export async function saveSupabaseConfig(
-  url: string,
-  anonKey: string,
-): Promise<void> {
-  await settings.set(URL_KEY, url);
-  await settings.set(ANON_KEY_KEY, anonKey);
-  _client = null;
-  _currentUrl = null;
-}
-
-export async function clearSupabaseConfig(): Promise<void> {
-  await settings.remove(URL_KEY);
-  await settings.remove(ANON_KEY_KEY);
-  _client = null;
-  _currentUrl = null;
-}
-
-export async function getSupabase(): Promise<SupabaseClient | null> {
-  const cfg = await getStoredSupabaseConfig();
-  if (cfg === null) return null;
-  if (_client !== null && _currentUrl === cfg.url) return _client;
-  _client = createClient(cfg.url, cfg.anonKey, {
+export function getSupabase(): SupabaseClient {
+  if (_client !== null) return _client;
+  _client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       storage: supabaseStorageAdapter,
       autoRefreshToken: true,
@@ -46,6 +28,10 @@ export async function getSupabase(): Promise<SupabaseClient | null> {
       detectSessionInUrl: false,
     },
   });
-  _currentUrl = cfg.url;
   return _client;
+}
+
+/** Backwards-compat shim for callers that still expect the old async shape. */
+export function getStoredSupabaseConfig(): { url: string; anonKey: string } {
+  return { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY };
 }

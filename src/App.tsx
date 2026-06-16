@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
-import { ConfigScreen } from './auth/ConfigScreen';
 import { registerDeepLinkAuth } from './auth/deepLinkHandler';
 import { LoginScreen } from './auth/LoginScreen';
 import { BridgeClientProvider, useBridge } from './bridge/BridgeClientContext';
@@ -91,7 +90,7 @@ function Router() {
 
   useEffect(() => {
     void (async () => {
-      unsubRef.current = await registerDeepLinkAuth(() => getSupabase());
+      unsubRef.current = await registerDeepLinkAuth(async () => getSupabase());
     })();
     const routingPromise = installNotificationRouting();
     return () => {
@@ -107,7 +106,6 @@ function Router() {
       </main>
     );
   }
-  if (status === 'needs-config') return <ConfigScreen />;
   if (status === 'signed-out') return <LoginScreen />;
   return <SignedInRouter />;
 }
