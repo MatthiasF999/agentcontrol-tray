@@ -45,8 +45,8 @@ export function detectWsl(): Promise<WslStatus> {
   return invoke<WslStatus>('detect_wsl');
 }
 
-export function bridgePairState(distro: string): Promise<string> {
-  return invoke<string>('bridge_pair_state', { distro });
+export function bridgePairState(): Promise<string> {
+  return invoke<string>('bridge_pair_state');
 }
 
 export function installWsl(): Promise<null> {

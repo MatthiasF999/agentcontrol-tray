@@ -135,10 +135,8 @@ function useOnboardingGate() {
       // try to mint a fresh claim code on top of a working bridge
       // (which surfaced as "bridge did not expose a claim code on
       // /pair within 30s" in v0.3.4).
-      const distro =
-        (await settings.get<string>('bridge.distro.v1')) ?? 'Ubuntu-22.04';
       try {
-        const state = await bridgePairState(distro);
+        const state = await bridgePairState();
         if (state === 'paired') {
           await settings.set(SETUP_DONE_KEY, true);
           setDone(true);
