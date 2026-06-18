@@ -5,10 +5,75 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AgentControl</title>
+    <style>
+      /* Splash shown until React mounts + paints over `#root`. Inlined so
+         it appears the instant the WebView2 process boots — the wait
+         until the JS bundle parses + AuthProvider initialises was
+         making the tray feel frozen for 1-2 min on cold start. */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #0e1116;
+        color: #e6edf3;
+        font-family:
+          system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+      }
+      #splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        z-index: 1;
+      }
+      #splash h1 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      #splash p {
+        margin: 0;
+        opacity: 0.7;
+        font-size: 14px;
+      }
+      .pulse {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #818cf8 0%, #4f46e5 70%);
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(0.9);
+          opacity: 0.7;
+        }
+        50% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      /* The first React render targets `#root`; once it has children we
+         hide the splash. CSS-only — no JS coordination needed. */
+      #root:not(:empty) ~ #splash {
+        display: none;
+      }
+    </style>
   </head>
 
   <body>
     <div id="root"></div>
+    <div id="splash">
+      <div class="pulse"></div>
+      <h1>AgentControl</h1>
+      <p>Starting up…</p>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
