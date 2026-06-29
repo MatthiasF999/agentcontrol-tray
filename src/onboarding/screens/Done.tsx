@@ -42,8 +42,9 @@ export function Done({ state, onComplete }: ScreenProps) {
   };
 
   return (
-    <section className="screen">
-      <h1>Bridge installed</h1>
+    <section className="step">
+      <span className="step-eyebrow">Done</span>
+      <h1 className="step-title">Bridge installed</h1>
       <p className="step-ok">
         The bridge is installed and running as a systemd-user service. Keep your
         API key somewhere safe — you need it for the first AgentControl sign-in:
@@ -66,9 +67,13 @@ export function Done({ state, onComplete }: ScreenProps) {
 
       <DoneLinks />
 
-      <footer className="actions">
-        <button type="button" className="btn-primary" onClick={onComplete}>
-          Open AgentControl
+      <footer className="step-actions">
+        <button
+          type="button"
+          className="pill pill-primary"
+          onClick={onComplete}
+        >
+          Launch AgentControl
         </button>
       </footer>
     </section>

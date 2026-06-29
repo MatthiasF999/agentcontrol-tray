@@ -74,7 +74,7 @@ function usePairFlow(distro: string, dispatch: Dispatch<Action>) {
   return { error, finishing, setError };
 }
 
-function SignInActions({
+function PairActions({
   error,
   finishing,
   onRetry,
@@ -86,15 +86,15 @@ function SignInActions({
   onSkip: () => void;
 }) {
   return (
-    <footer className="actions">
+    <footer className="step-actions">
       {error ? (
-        <button type="button" className="btn-primary" onClick={onRetry}>
+        <button type="button" className="pill pill-primary" onClick={onRetry}>
           Retry
         </button>
       ) : null}
       <button
         type="button"
-        className="link"
+        className="text-link"
         onClick={onSkip}
         disabled={finishing}
       >
@@ -104,7 +104,7 @@ function SignInActions({
   );
 }
 
-export function SignIn({ state, dispatch }: ScreenProps) {
+export function Pair({ state, dispatch }: ScreenProps) {
   const { distro } = state.install;
   const { signinClaimCode } = state;
   const { error, finishing, setError } = usePairFlow(distro, dispatch);
@@ -116,12 +116,12 @@ export function SignIn({ state, dispatch }: ScreenProps) {
       : 'Preparing…';
 
   return (
-    <section className="screen">
-      <h1>Sign in to AgentControl</h1>
-      <p className="screen-intro">
-        Pair this bridge with your AgentControl org. We'll open the operator
-        portal in your browser — approve there and onboarding finishes pairing
-        automatically.
+    <section className="step">
+      <span className="step-eyebrow">Pair bridge</span>
+      <h1 className="step-title">Pair with your organization</h1>
+      <p className="step-intro">
+        We opened the AgentControl portal in your browser. Sign in and approve
+        this bridge there — pairing finishes automatically.
       </p>
 
       {signinClaimCode ? (
@@ -137,7 +137,7 @@ export function SignIn({ state, dispatch }: ScreenProps) {
         <p className="step-hint">{status}</p>
       )}
 
-      <SignInActions
+      <PairActions
         error={error}
         finishing={finishing}
         onRetry={() => void bootstrap(distro, dispatch, setError)}
