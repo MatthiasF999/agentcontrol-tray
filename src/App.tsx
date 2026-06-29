@@ -151,7 +151,7 @@ const DISTRO_KEY = 'bridge.distro.v1';
 
 /**
  * Global pair-tokens listener. Mounted at App-level so a deep-link from
- * the operator-portal `/app/pair-bridge` page reaches the tray regardless
+ * the `app.<host>/pair-bridge` page reaches the tray regardless
  * of whether the user has the SignIn onboarding screen open at the time.
  * On receive: write the env, restart the bridge, mark onboarding done →
  * tray auto-transitions to the main UI.

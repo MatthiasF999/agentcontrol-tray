@@ -14,6 +14,20 @@ when releases ship through the operator-portal.
 
 ## [Unreleased]
 
+### Changed
+- Phase 56.3 — **migrated to the multi-subdomain production domain.** The
+  default host is now `agent-control.io` (was the `178.105.244.59`
+  self-signed Hetzner box), with each role on its own Let's Encrypt
+  subdomain: `api.` (Supabase REST/auth + edge functions), `app.`
+  (end-user web + `/pair-bridge`), `operator.` (admin portal + download),
+  `install.` (bridge tarball). Bumped to `0.5.0` — breaking, since the
+  single-host assumption is gone.
+
+### Removed
+- Phase 56.3 — **dropped the self-signed-cert workarounds.** No more
+  `NODE_TLS_REJECT_UNAUTHORIZED=0` in the bridge `.env` writer and no
+  `curl -k` for the tarball download — the LE certs verify normally.
+
 ### Added
 - Phase 55.3.0 — **folded the standalone bridge installer into the tray.**
   First-run onboarding (WSL2 + Ubuntu + system deps + Node 22 + Claude

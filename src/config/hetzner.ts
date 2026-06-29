@@ -1,10 +1,11 @@
 // Single source of truth for the AgentControl deployment host. Build-time
 // override via `VITE_HETZNER_HOST=my.host.example.com pnpm tauri build`;
-// defaults to the user's own Hetzner CX23 box. Keep this file in sync with
-// `src-tauri/src/config.rs` — the Rust-side commands have the same need
-// and the env-var name must match.
+// defaults to the production domain. Each role lives on its own subdomain
+// (api / app / operator / install) behind a Let's Encrypt cert. Keep this
+// file in sync with `src-tauri/src/config.rs` — the Rust-side commands have
+// the same need and the env-var name must match.
 
-const DEFAULT_HOST = '178.105.244.59';
+const DEFAULT_HOST = 'agent-control.io';
 
 // Empty-string guard: GH Actions plumbs `${{ vars.VITE_HETZNER_HOST }}`
 // which evaluates to '' when the repo variable isn't set. `??` only
@@ -14,8 +15,9 @@ const RAW = (
 ).env?.VITE_HETZNER_HOST;
 export const HETZNER_HOST: string = RAW && RAW.length > 0 ? RAW : DEFAULT_HOST;
 
-export const BASE_URL = `https://${HETZNER_HOST}`;
-export const APP_URL = `${BASE_URL}/app`;
+export const SUPABASE_URL = `https://api.${HETZNER_HOST}`;
+export const APP_URL = `https://app.${HETZNER_HOST}`;
+export const OPERATOR_URL = `https://operator.${HETZNER_HOST}`;
+export const INSTALL_URL = `https://install.${HETZNER_HOST}`;
 export const PAIR_BRIDGE_URL = `${APP_URL}/pair-bridge`;
-export const OPERATOR_URL = `${BASE_URL}/operator`;
 export const OPERATOR_DOWNLOAD_URL = `${OPERATOR_URL}/download`;

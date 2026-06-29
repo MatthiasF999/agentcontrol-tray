@@ -7,7 +7,7 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { BASE_URL } from '../config/hetzner';
+import { SUPABASE_URL } from '../config/hetzner';
 import { getSupabase } from '../lib/supabase';
 
 type Status = 'loading' | 'signed-out' | 'signed-in';
@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       session,
-      supabaseUrl: BASE_URL,
+      supabaseUrl: SUPABASE_URL,
       client,
       async signInWithMagicLink(email, redirectTo) {
         const { error } = await client.auth.signInWithOtp({

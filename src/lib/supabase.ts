@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { BASE_URL } from '../config/hetzner';
+import { SUPABASE_URL } from '../config/hetzner';
 import { supabaseStorageAdapter } from './storage';
 
 // AgentControl is a hosted product: app + tray + bridge all talk to the
@@ -12,7 +12,6 @@ import { supabaseStorageAdapter } from './storage';
 // The anon JWT is `role=anon` — it ships in every web bundle by design;
 // RLS does the load-bearing isolation server-side, the anon key only
 // grants the routes the user could already hit unauthenticated.
-const SUPABASE_URL = BASE_URL;
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgwMjcxNDM2LCJleHAiOjIwOTU2MzE0MzZ9.X6qsRCvwhSg-dAQVQd188B8YoE1fZPi8I07nDnmww2A';
 
