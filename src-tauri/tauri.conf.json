@@ -43,6 +43,10 @@
     "windows": {
       "nsis": {
         "installerHooks": "installer-hooks.nsh"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
       }
     },
     "icon": [
