@@ -3,7 +3,7 @@ use crate::config;
 use tauri::AppHandle;
 use tokio::time::{sleep, Duration};
 
-// Bridge tarball lives on the same Hetzner Caddy that serves /app/*.
+// Bridge tarball is served from the `install.<host>` subdomain.
 // The bridge repo is private, so GitHub's `archive/refs/heads/main.tar.gz`
 // endpoint would 404 without an auth header — baking a token into the
 // tray is a non-starter. The tarball lives on the host at
@@ -18,13 +18,10 @@ pub async fn download_bridge(
     distro: String,
     event_id: String,
 ) -> Result<CommandResult, String> {
-    // `-k` because the Hetzner Caddy serves an internal CA cert (IP literal
-    // for `default_sni`), which Ubuntu inside WSL doesn't trust by default.
-    // Tightening this means either shipping the CA, switching to a public
-    // domain + Let's Encrypt, or signing the tarball and checking the sig
-    // post-download — none of which are critical-path for the first ship.
+    // The `install.<host>` subdomain serves a public Let's Encrypt cert, so
+    // the curl verifies TLS normally — no `-k` needed.
     let cmd = format!(
-        "mkdir -p {dir} && curl -fsSLk {url} | tar -xz -C {dir} --strip-components=1",
+        "mkdir -p {dir} && curl -fsSL {url} | tar -xz -C {dir} --strip-components=1",
         dir = BRIDGE_DIR,
         url = config::bridge_tarball_url(),
     );
