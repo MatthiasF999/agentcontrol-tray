@@ -1,0 +1,217 @@
+; AgentControl Windows bootstrapper  (Phase 63)
+; ---------------------------------------------------------------------------
+; A tiny, version-stable installer entry point. ONE URL
+;   https://install.agent-control.io/setup.exe
+; always installs the latest tray. It reads latest.json, downloads the real
+; signed Tauri NSIS installer, SHA256-verifies it, and hands off with /S.
+; Post-install upgrades are handled by the Tauri updater (Phase 27.7).
+;
+; Design note: the stock NSIS toolchain on the build host ships no INetC /
+; Crypto / nsJSON plugins, and the bundled NSISdl cannot do HTTPS. So the
+; three plugin-shaped jobs (TLS download, JSON parse, SHA256) are delegated
+; to a hidden PowerShell worker (fetch.ps1) that is present on every
+; Win10/11. NSIS owns the dark UI + a real, live progress bar fed from the
+; worker's pct.txt. Zero third-party NSIS plugins -> builds anywhere makensis
+; runs, including Linux CI.
+; ---------------------------------------------------------------------------
+
+Unicode true
+ManifestDPIAware true
+Name "AgentControl"
+Caption "AgentControl Setup"
+OutFile "agentcontrol-bootstrapper.exe"
+; Tauri installs per-user (currentUser) -> no admin, no UAC prompt.
+RequestExecutionLevel user
+SetCompressor /SOLID lzma
+BrandingText " "
+XPStyle off            ; classic controls so PBM_SET*COLOR is honored
+
+!include "nsDialogs.nsh"
+!include "LogicLib.nsh"
+!include "WinMessages.nsh"
+
+!define MANIFEST_URL "https://install.agent-control.io/latest.json"
+
+; --- theme (tray palette) -------------------------------------------------
+; SetCtlColors takes 0xRRGGBB; progress-bar messages take COLORREF 0x00BBGGRR.
+!define CLR_BG      0x0E1116   ; #0e1116 background
+!define CLR_TEXT    0xF1F5F9   ; #f1f5f9 primary text
+!define CLR_MUTED   0x94A3B8   ; #94a3b8 secondary text
+!define CLR_ACCENT  0x818CF8   ; #818cf8 brand accent
+!define PB_BAR      0xE5464F   ; #4f46e5 as BGR
+!define PB_BK       0x16110E   ; #0e1116 as BGR
+
+!ifndef PBM_SETRANGE32
+  !define PBM_SETRANGE32  0x406
+!endif
+!ifndef PBM_SETPOS
+  !define PBM_SETPOS      0x402
+!endif
+!ifndef PBM_SETBARCOLOR
+  !define PBM_SETBARCOLOR 0x409
+!endif
+!ifndef PBM_SETBKCOLOR
+  !define PBM_SETBKCOLOR  0x2001
+!endif
+!ifndef PBS_SMOOTH
+  !define PBS_SMOOTH      0x01
+!endif
+
+Var Dialog
+Var LblBrand
+Var LblStatus
+Var ProgBar
+Var ChildExe
+Var TitleFont
+Var BrandFont
+
+Page custom BootPageShow
+
+Function .onInit
+  InitPluginsDir
+FunctionEnd
+
+Function BootPageShow
+  nsDialogs::Create 1018
+  Pop $Dialog
+  ${If} $Dialog == error
+    Abort
+  ${EndIf}
+  SetCtlColors $Dialog ${CLR_TEXT} ${CLR_BG}
+
+  ; This page does all the work; the wizard chrome buttons stay hidden.
+  GetDlgItem $0 $HWNDPARENT 1
+  ShowWindow $0 ${SW_HIDE}
+  GetDlgItem $0 $HWNDPARENT 3
+  ShowWindow $0 ${SW_HIDE}
+  GetDlgItem $0 $HWNDPARENT 2
+  ShowWindow $0 ${SW_HIDE}
+
+  CreateFont $BrandFont "Segoe UI" "22" "700"
+  CreateFont $TitleFont "Segoe UI" "9" "400"
+
+  ${NSD_CreateLabel} 0 34u 100% 16u "AgentControl"
+  Pop $LblBrand
+  SetCtlColors $LblBrand ${CLR_ACCENT} ${CLR_BG}
+  SendMessage $LblBrand ${WM_SETFONT} $BrandFont 1
+
+  ${NSD_CreateLabel} 0 86u 100% 12u "Preparing installer..."
+  Pop $LblStatus
+  SetCtlColors $LblStatus ${CLR_MUTED} ${CLR_BG}
+  SendMessage $LblStatus ${WM_SETFONT} $TitleFont 1
+
+  ; nsDialogs has no progress-bar primitive; create the native control
+  ; directly. CreateControl honours the same dialog-unit / percent coords
+  ; as the NSD_* macros and parents it to the page for us.
+  nsDialogs::CreateControl "msctls_progress32" \
+    "${PBS_SMOOTH}|0x40000000|0x10000000" "0" \
+    0 104u 100% 8u ""
+  Pop $ProgBar
+  SendMessage $ProgBar ${PBM_SETRANGE32} 0 100
+  SendMessage $ProgBar ${PBM_SETBARCOLOR} 0 ${PB_BAR}
+  SendMessage $ProgBar ${PBM_SETBKCOLOR} 0 ${PB_BK}
+
+  File "/oname=$PLUGINSDIR\fetch.ps1" "fetch.ps1"
+  Exec 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\fetch.ps1" -ManifestUrl "${MANIFEST_URL}" -WorkDir "$PLUGINSDIR"'
+
+  ${NSD_CreateTimer} BootTick 250
+  nsDialogs::Show
+FunctionEnd
+
+Function BootTick
+  ${IfNot} ${FileExists} "$PLUGINSDIR\result.txt"
+    ${If} ${FileExists} "$PLUGINSDIR\pct.txt"
+      Call ReadPct
+      SendMessage $ProgBar ${PBM_SETPOS} $1 0
+    ${EndIf}
+    ${If} ${FileExists} "$PLUGINSDIR\phase.txt"
+      Push "$PLUGINSDIR\phase.txt"
+      Call ReadLine
+      Pop $1
+      ${NSD_SetText} $LblStatus $1
+    ${EndIf}
+    Return
+  ${EndIf}
+
+  Push "$PLUGINSDIR\result.txt"
+  Call ReadLine
+  Pop $1
+  ${If} $1 == "DONE"
+    ${NSD_KillTimer} BootTick
+    Push "$PLUGINSDIR\path.txt"
+    Call ReadLine
+    Pop $ChildExe
+    SendMessage $ProgBar ${PBM_SETPOS} 100 0
+    ${NSD_SetText} $LblStatus "Starting installer..."
+    Call RunChild
+  ${ElseIf} $1 == "ERR"
+    ${NSD_KillTimer} BootTick
+    Push "$PLUGINSDIR\error.txt"
+    Call ReadLine
+    Pop $1
+    ${NSD_SetText} $LblStatus "Installation failed."
+    MessageBox MB_ICONSTOP|MB_OK "AgentControl could not be installed.$\n$\n$1"
+    Quit
+  ${EndIf}
+  ; empty/partial result.txt: leave timer running, retry next tick
+FunctionEnd
+
+; Hand off to the real signed installer, silently, then exit. The Tauri
+; POSTINSTALL hook launches the tray + onboarding, so no further UI here.
+; A bootstrapper invoked with /S stays silent through the whole chain.
+Function RunChild
+  ${If} $ChildExe == ""
+    MessageBox MB_ICONSTOP|MB_OK "Internal error: installer path missing."
+    Quit
+  ${EndIf}
+  ExecWait '"$ChildExe" /S' $0
+  Quit
+FunctionEnd
+
+; Read a whole single-line file (worker writes them without trailing newline)
+; and strip any stray CR/LF. Input: path on stack. Output: value on stack.
+Function ReadLine
+  Exch $2
+  Push $3
+  ClearErrors
+  FileOpen $3 $2 r
+  ${If} ${Errors}
+    StrCpy $2 ""
+  ${Else}
+    FileRead $3 $2
+    FileClose $3
+  ${EndIf}
+  Push $2
+  Call TrimCRLF
+  Pop $2
+  Pop $3
+  Exch $2
+FunctionEnd
+
+; pct.txt -> integer in $1
+Function ReadPct
+  Push "$PLUGINSDIR\pct.txt"
+  Call ReadLine
+  Pop $1
+  ${If} $1 == ""
+    StrCpy $1 "0"
+  ${EndIf}
+FunctionEnd
+
+; strip trailing CR/LF from string on stack
+Function TrimCRLF
+  Exch $0
+  Push $1
+  loop:
+    StrCpy $1 $0 1 -1
+    ${If} $1 == "$\r"
+    ${OrIf} $1 == "$\n"
+      StrCpy $0 $0 -1
+      Goto loop
+    ${EndIf}
+  Pop $1
+  Exch $0
+FunctionEnd
+
+Section
+SectionEnd

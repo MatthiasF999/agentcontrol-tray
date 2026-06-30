@@ -25,3 +25,8 @@ dist-ssr
 dist-release/
 src-tauri/bridge/
 src-tauri/shared/
+
+# Phase 63 bootstrapper build outputs (rebuilt + redeployed by CI)
+bootstrapper/*.exe
+bootstrapper/latest.json
+bootstrapper/dl/

@@ -1,0 +1,9 @@
+{
+  "version": "0.5.0",
+  "released_at": "2026-06-29T22:30:00Z",
+  "windows": {
+    "url": "https://github.com/MatthiasF999/agentcontrol-tray/releases/download/v0.5.0/agentcontrol-tray_0.5.0_x64-setup.exe",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "signature": "<base64 contents of the .exe.sig minisign file (optional)>"
+  }
+}

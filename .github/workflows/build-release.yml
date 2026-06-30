@@ -201,3 +201,77 @@ jobs:
             src-tauri/target/**/release/bundle/**/*.exe*
             src-tauri/target/**/release/bundle/**/*.nsis.zip*
           retention-days: 7
+
+  # Phase 63 — Windows bootstrapper. After the real installers exist on the
+  # release, build the tiny version-stable setup.exe, generate latest.json
+  # from the freshly released Windows asset, and publish both to the install
+  # host so `https://install.agent-control.io/setup.exe` always fetches the
+  # latest. Needs only stock NSIS (no plugins) -> plain ubuntu runner.
+  bootstrapper:
+    name: Bootstrapper (setup.exe + latest.json)
+    needs: build
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            V="${{ github.event.inputs.version }}"
+          else
+            V="${GITHUB_REF_NAME}"
+          fi
+          V="${V#v}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $V"
+
+      - name: Install NSIS
+        run: sudo apt-get update && sudo apt-get install -y nsis
+
+      - name: Build bootstrapper
+        working-directory: bootstrapper
+        run: |
+          makensis -V2 agentcontrol-bootstrapper.nsi
+          mv agentcontrol-bootstrapper.exe setup.exe
+          ls -l setup.exe
+
+      - name: Generate latest.json
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ASSET="agentcontrol-tray_${VERSION}_x64-setup.exe"
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/${ASSET}"
+          gh release download "v${VERSION}" -R "$GITHUB_REPOSITORY" \
+            -p "$ASSET" -p "${ASSET}.sig" -D dl
+          SHA=$(sha256sum "dl/${ASSET}" | awk '{print $1}')
+          # Tauri writes the .sig already base64-encoded; pass it through verbatim.
+          SIG=$(tr -d '\r\n' < "dl/${ASSET}.sig" || true)
+          RELEASED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          jq -n --arg v "$VERSION" --arg r "$RELEASED_AT" \
+                --arg u "$URL" --arg s "$SHA" --arg sig "$SIG" \
+            '{version:$v, released_at:$r, windows:{url:$u, sha256:$s, signature:$sig}}' \
+            > bootstrapper/latest.json
+          cat bootstrapper/latest.json
+
+      - name: Deploy to install.agent-control.io
+        env:
+          SSH_KEY: ${{ secrets.INSTALL_HOST_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          HOST=178.105.244.59
+          SCP="scp -i $HOME/.ssh/deploy -o StrictHostKeyChecking=accept-new"
+          $SCP bootstrapper/setup.exe   root@${HOST}:/opt/static-sites/install/setup.exe
+          $SCP bootstrapper/latest.json root@${HOST}:/opt/static-sites/install/latest.json
+          echo "Deployed setup.exe + latest.json to install.agent-control.io"
