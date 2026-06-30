@@ -1,6 +1,30 @@
 import type { Dispatch } from 'react';
 
-export type Screen = 'setup' | 'installing' | 'signin' | 'claudeauth' | 'done';
+// Phase 60 — wizard redesign. The reducer IS the step state-machine; each
+// value renders one full-screen step inside the dark left-rail WizardShell.
+export type Screen =
+  | 'welcome'
+  | 'license'
+  | 'syscheck'
+  | 'install'
+  | 'pair'
+  | 'claudeauth'
+  | 'done';
+
+// The left-rail shows 8 macro steps. `install` spans two rail rows
+// ("Install backend" → "Bridge install") that light up from sub-progress;
+// every other screen maps to exactly one row. Order matches the rail.
+export type MacroStep = { id: string; label: string };
+export const MACRO_STEPS: readonly MacroStep[] = [
+  { id: 'welcome', label: 'Welcome' },
+  { id: 'license', label: 'License' },
+  { id: 'syscheck', label: 'System check' },
+  { id: 'install_backend', label: 'Install backend' },
+  { id: 'bridge_install', label: 'Bridge install' },
+  { id: 'pair', label: 'Pair bridge' },
+  { id: 'claudeauth', label: 'Claude Code' },
+  { id: 'done', label: 'Done' },
+];
 
 export type AutoStep =
   | 'wsl_install'
@@ -32,6 +56,7 @@ export type InstallState = {
 
 export type WizardState = {
   screen: Screen;
+  licenseAccepted: boolean;
   formData: FormData;
   install: InstallState;
   apiKey: string;
@@ -41,6 +66,7 @@ export type WizardState = {
 
 export type Action =
   | { type: 'SCREEN'; screen: Screen }
+  | { type: 'SET_LICENSE'; accepted: boolean }
   | { type: 'UPDATE_FORM'; data: Partial<FormData> }
   | { type: 'SET_DISTRO'; distro: string }
   | { type: 'STEP_START'; step: AutoStep }
@@ -89,7 +115,8 @@ const fill = <T>(value: () => T): Record<AutoStep, T> =>
   );
 
 export const initialState: WizardState = {
-  screen: 'setup',
+  screen: 'welcome',
+  licenseAccepted: false,
   formData: {
     gitName: '',
     gitEmail: '',
@@ -117,6 +144,8 @@ export function reducer(state: WizardState, action: Action): WizardState {
   switch (action.type) {
     case 'SCREEN':
       return { ...state, screen: action.screen };
+    case 'SET_LICENSE':
+      return { ...state, licenseAccepted: action.accepted };
     case 'UPDATE_FORM':
       return { ...state, formData: { ...state.formData, ...action.data } };
     case 'SET_DISTRO':
@@ -154,6 +183,46 @@ export function reducer(state: WizardState, action: Action): WizardState {
       };
     default:
       return state;
+  }
+}
+
+// Auto-steps that belong to the "Bridge install" rail row; the earlier
+// ones (WSL/Ubuntu/deps/git) belong to "Install backend".
+const BRIDGE_PHASE: ReadonlySet<AutoStep> = new Set<AutoStep>([
+  'node',
+  'claude_cli',
+  'source',
+  'npm_install',
+  'build',
+  'env',
+  'systemd',
+]);
+
+// Index into MACRO_STEPS for the currently-active rail row. The `install`
+// screen straddles rows 3/4 depending on how far the sequence has run.
+export function activeMacroIndex(state: WizardState): number {
+  switch (state.screen) {
+    case 'welcome':
+      return 0;
+    case 'license':
+      return 1;
+    case 'syscheck':
+      return 2;
+    case 'install': {
+      const inBridge = AUTO_STEPS.some(
+        (s) =>
+          BRIDGE_PHASE.has(s) &&
+          (state.install.stepStatus[s] === 'running' ||
+            state.install.stepStatus[s] === 'done'),
+      );
+      return inBridge ? 4 : 3;
+    }
+    case 'pair':
+      return 5;
+    case 'claudeauth':
+      return 6;
+    case 'done':
+      return 7;
   }
 }
 

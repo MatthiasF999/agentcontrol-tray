@@ -38,7 +38,7 @@ src/process/useProjectsWithInstances.ts:29
 src/screens/ArtifactViewer.tsx:27
 src/screens/BacklogConsumptionScreen.tsx:132
 src/screens/ContainerControlCard.tsx:18
-src/screens/HomeScreen.tsx:20
+src/screens/HomeScreen.tsx:21
 src/screens/PairScreen.tsx:8
 src/screens/ProcessInstanceDetail.tsx:98
 src/screens/ProcessInstancesScreen.tsx:55

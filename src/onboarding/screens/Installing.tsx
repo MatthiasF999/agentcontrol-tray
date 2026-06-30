@@ -16,8 +16,9 @@ export function Installing({ state, dispatch }: ScreenProps) {
   const erroredIdx = AUTO_STEPS.findIndex((s) => stepStatus[s] === 'error');
 
   return (
-    <section className="screen">
-      <h1>Installing…</h1>
+    <section className="step">
+      <span className="step-eyebrow">Installing</span>
+      <h1 className="step-title">Setting up the bridge…</h1>
       <div className="progress">
         <div className="progress-fill" style={{ width: `${pct}%` }} />
       </div>
@@ -29,10 +30,10 @@ export function Installing({ state, dispatch }: ScreenProps) {
       {install.errorMsg ? (
         <>
           <div className="step-error-banner">{install.errorMsg}</div>
-          <footer className="actions">
+          <footer className="step-actions">
             <button
               type="button"
-              className="btn-primary"
+              className="pill pill-primary"
               onClick={() => void runFrom(erroredIdx < 0 ? 0 : erroredIdx)}
             >
               Retry
