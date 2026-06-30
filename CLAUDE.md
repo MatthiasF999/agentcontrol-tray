@@ -107,3 +107,23 @@ This repo applies Pattern 1 (Architect-Pre-Step) and Pattern 2
 - Not the end-user app (that's `agentcontrol-app`)
 - Not the operator-portal admin UI (that's served by supabase Caddy)
 - Not a replacement for `agentctl` CLI (CLI stays for headless servers)
+
+## Parallel teammates on this repo
+
+When 2+ Claude teammates work in this repo simultaneously, each MUST use:
+
+  git worktree add /tmp/<repo-name>-<branch-slug> <branch>
+
+instead of `git checkout <branch>` in the shared clone. Reason:
+git branch refs are global per-repo (not per-worktree), so a sibling
+teammate's `git checkout other-branch` instantly yanks your HEAD off
+your branch and a subsequent push can clobber refs. Worktrees give
+each teammate isolated HEAD + working tree.
+
+Pattern:
+  cd /tmp/<repo-name>-<branch-slug>
+  # do work, commit, push
+  cd /<original-path>
+  git worktree remove /tmp/<repo-name>-<branch-slug>
+
+Reference: feedback_agent_teams_worktree_isolation_incomplete memory.
