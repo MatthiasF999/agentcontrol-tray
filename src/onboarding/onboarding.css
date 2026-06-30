@@ -1,12 +1,20 @@
+/* Phase 60 — install wizard. Dark theme deliberately mirrors the boot
+   splash (index.html): same #0e1116 bg + #818cf8→#4f46e5 radial gradient,
+   so the hand-off from splash to wizard is seamless. Single source of
+   truth for the wizard's look; no light-mode variant. */
 :root {
-  --bg: #f7f8fa;
-  --bg-elev: #ffffff;
-  --accent: #4f46e5;
-  --text: #18181b;
-  --muted: #6b7280;
-  --border: #e4e4e7;
+  --bg: #0e1116;
+  --rail-bg: #12161d;
+  --elev: #1a2030;
+  --accent: #818cf8;
+  --accent-2: #4f46e5;
+  --text: #e6edf3;
+  --muted: #8b98a9;
+  --border: #2a313c;
+  --danger: #f87171;
+  --ok: #4ade80;
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
   color: var(--text);
   background: var(--bg);
 }
@@ -18,68 +26,288 @@ body {
   margin: 0;
 }
 
-/* screen shell */
-.app-shell {
+/* ---- two-pane shell (35% rail / 65% content) ---- */
+.wizard {
+  display: flex;
   height: 100vh;
+  background: var(--bg);
+}
+.wizard-rail {
+  width: 35%;
+  min-width: 220px;
+  max-width: 320px;
+  background: var(--rail-bg);
+  border-right: 1px solid var(--border);
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.wizard-pane {
+  flex: 1;
   overflow-y: auto;
   display: flex;
   justify-content: center;
+  padding: 56px 48px;
 }
 
-.screen {
+/* ---- brand ---- */
+.wizard-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.wizard-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent) 0%, var(--accent-2) 70%);
+}
+.wizard-brand-name {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ---- rail step list ---- */
+.rail-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: 1;
+}
+.rail-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.rail-step.rail-current,
+.rail-step.rail-done {
+  color: var(--text);
+}
+.rail-circle {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #fff;
+}
+.rail-circle.rail-pending {
+  background: #1f2937;
+  border: 1px solid var(--border);
+}
+.rail-circle.rail-done {
+  background: radial-gradient(circle, var(--accent) 0%, var(--accent-2) 70%);
+}
+.rail-circle.rail-current {
+  background: radial-gradient(circle, var(--accent) 0%, var(--accent-2) 70%);
+  animation: railPulse 1.6s ease-in-out infinite;
+}
+@keyframes railPulse {
+  0%,
+  100% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.wizard-help {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+.wizard-help:hover {
+  color: var(--accent);
+}
+
+/* ---- step content ---- */
+.step {
   width: 100%;
-  max-width: 640px;
-  padding: 48px 40px;
+  max-width: 460px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
-
-.screen h1 {
-  font-size: 24px;
-  margin: 0;
+.step-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
 }
-
-.screen-intro {
+.step-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 650;
+}
+.step-intro {
+  margin: 0;
   color: var(--muted);
-  margin: 0;
-  line-height: 1.5;
+  line-height: 1.55;
 }
-
-.screen-section {
+.step-section {
   margin: 8px 0 0 0;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
 }
-
-/* actions */
-.actions {
-  margin-top: 16px;
-  display: flex;
-  gap: 12px;
-}
-
-.actions button {
-  padding: 8px 18px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-elev);
-  cursor: pointer;
+.step-hint {
+  margin: 0;
+  color: var(--muted);
   font-size: 13px;
 }
+.step-ok {
+  margin: 0;
+  color: var(--ok);
+  line-height: 1.55;
+}
 
-.actions button:disabled {
+.feature-list {
+  list-style: none;
+  margin: 4px 0 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.feature-list li {
+  position: relative;
+  padding-left: 26px;
+  color: var(--text);
+  line-height: 1.45;
+}
+.feature-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.checkbox-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-2);
+}
+
+/* ---- pill buttons ---- */
+.step-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pill {
+  padding: 9px 22px;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
+}
+.pill:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.pill-primary {
+  background: var(--accent);
+  color: #0e1116;
+  border-color: var(--accent);
+}
+.pill-primary:hover:not(:disabled) {
+  background: #93a0fb;
+}
+.pill-ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+.pill-ghost:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.text-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  text-decoration: underline;
+  align-self: flex-start;
+}
+.text-link:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-button.btn-primary {
-  background: var(--accent);
-  color: white;
-  border-color: var(--accent);
+/* ---- system-check dep rows ---- */
+.dep-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dep-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+.dep-glyph {
+  width: 20px;
+  text-align: center;
+  font-weight: 700;
+}
+.dep-glyph.dep-ok {
+  color: var(--ok);
+}
+.dep-glyph.dep-missing {
+  color: var(--accent);
+}
+.dep-glyph.dep-checking {
+  color: var(--muted);
+}
+.dep-label {
+  font-weight: 500;
+}
+.dep-note {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
 }
 
-/* progress bar */
+/* ---- progress bar ---- */
 .progress {
   height: 4px;
   background: var(--border);
@@ -88,11 +316,11 @@ button.btn-primary {
 }
 .progress-fill {
   height: 100%;
-  background: var(--accent);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
   transition: width 0.25s ease;
 }
 
-/* install step list */
+/* ---- granular install step list (right pane) ---- */
 .install-steps {
   list-style: none;
   padding: 0;
@@ -112,42 +340,32 @@ button.btn-primary {
 .install-steps li.status-done {
   color: var(--text);
 }
-
 .status-icon {
-  font-size: 16px;
+  font-size: 14px;
   width: 20px;
   text-align: center;
   color: var(--muted);
 }
 .status-icon.status-done {
-  color: #16a34a;
+  color: var(--ok);
 }
 .status-icon.status-running {
   color: var(--accent);
 }
 .status-icon.status-error {
-  color: #dc2626;
+  color: var(--danger);
 }
 
-.step-ok {
-  color: #15803d;
-  margin: 0;
-}
-.step-hint {
-  color: #64748b;
-  font-size: 13px;
-  margin: 0;
-}
 .step-error-banner {
-  background: #fee2e2;
-  border: 1px solid #fca5a5;
-  color: #991b1b;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
   padding: 10px 14px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
 }
 
-/* form fields */
+/* ---- form fields ---- */
 .field {
   display: flex;
   flex-direction: column;
@@ -158,35 +376,37 @@ button.btn-primary {
   font-weight: 500;
 }
 .field-req {
-  color: #dc2626;
+  color: var(--danger);
 }
 .field-input {
   padding: 9px 12px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
-  background: var(--bg-elev);
-  /* Inputs inherit nothing useful from the browser default in dark mode —
-     they'd render with the OS's near-black text on the dark `--bg-elev`
-     and be invisible. Pin to the theme's text color explicitly. */
+  background: var(--elev);
   color: var(--text);
 }
 .field-input::placeholder {
   color: var(--muted);
 }
+.field-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
 .field-input-error {
-  border-color: #dc2626;
+  border-color: var(--danger);
 }
 .field-error {
   font-size: 12px;
-  color: #dc2626;
+  color: var(--danger);
 }
 
-/* log stream */
+/* ---- log stream ---- */
 .log-stream {
-  background: #0f172a;
-  color: #e2e8f0;
-  border-radius: 6px;
+  background: #0a0d12;
+  color: #cbd5e1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   padding: 12px 14px;
   margin: 0;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -198,20 +418,20 @@ button.btn-primary {
   word-break: break-word;
 }
 .log-empty {
-  color: #64748b;
+  color: var(--muted);
 }
 .log-err {
-  color: #f87171;
+  color: var(--danger);
 }
 
-/* api key box */
+/* ---- api key / claim code box ---- */
 .key-box {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--bg-elev);
+  background: var(--elev);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 12px 14px;
 }
 .key-value {
@@ -220,8 +440,21 @@ button.btn-primary {
   word-break: break-all;
   flex: 1;
 }
+.key-box button {
+  padding: 6px 14px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+.key-box button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
-/* link list */
+/* ---- link list (done screen) ---- */
 .link-list {
   list-style: none;
   padding: 0;
@@ -238,17 +471,5 @@ button.btn-primary {
   font-size: 14px;
   padding: 0;
   text-decoration: underline;
-}
-
-/* Dark mode — Windows + macOS + Linux respect `prefers-color-scheme`.
-   Override the CSS variables so onboarding text isn't dark-on-dark. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f172a;
-    --bg-elev: #1e293b;
-    --accent: #818cf8;
-    --text: #f1f5f9;
-    --muted: #94a3b8;
-    --border: #334155;
-  }
+  align-self: flex-start;
 }
