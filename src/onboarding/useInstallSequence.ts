@@ -32,7 +32,7 @@ export function useInstallSequence(
           if (ok === false) return;
           if (typeof ok === 'string') currentDistro = ok;
         }
-        dispatch({ type: 'SCREEN', screen: 'signin' });
+        dispatch({ type: 'SCREEN', screen: 'pair' });
       } finally {
         runningRef.current = false;
       }

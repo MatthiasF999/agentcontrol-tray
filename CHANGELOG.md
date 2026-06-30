@@ -28,6 +28,17 @@ when releases ship through the operator-portal.
   release. See `bootstrapper/README.md`.
 
 ### Changed
+- Phase 60 — **redesigned the first-launch install wizard.** The onboarding
+  flow now renders inside a dark, splash-matching shell (`#0e1116` bg +
+  `#818cf8→#4f46e5` gradient) with a 35/65 left-rail step list (check /
+  pulsing-current / empty-pending circles) and pill buttons. Expanded from
+  5 to 8 steps: added **Welcome** (feature pitch) and **License** (terms
+  acceptance) steps, and reworked the old `Setup` screen into a
+  **System check** that probes WSL2 + Docker before collecting the git
+  identity. The reducer state-machine, 11-step install engine, live WSL
+  log streaming, and all existing Tauri commands are reused unchanged.
+  Bumped to `0.6.0` (UX-breaking first-run flow).
+
 - Phase 56.3 — **migrated to the multi-subdomain production domain.** The
   default host is now `agent-control.io` (was the `178.105.244.59`
   self-signed Hetzner box), with each role on its own Let's Encrypt

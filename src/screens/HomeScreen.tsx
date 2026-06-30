@@ -9,6 +9,7 @@ interface Props {
   onOpenSettings: () => void;
   onOpenProcesses: () => void;
   onOpenBacklog: (showDigest: boolean) => void;
+  onOpenTeams: () => void;
 }
 
 function statusColor(state: string): string {
@@ -21,6 +22,7 @@ export function HomeScreen({
   onOpenSettings,
   onOpenProcesses,
   onOpenBacklog,
+  onOpenTeams,
 }: Props) {
   const { session, supabaseUrl, signOut } = useAuth();
   const { status, error } = usePairingStatus();
@@ -53,6 +55,9 @@ export function HomeScreen({
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={() => onOpenBacklog(false)}>
               Backlog
+            </button>
+            <button type="button" onClick={onOpenTeams}>
+              Teams
             </button>
             <button type="button" onClick={onOpenProcesses}>
               Processes

@@ -43,17 +43,18 @@ export function ClaudeAuth({ state, dispatch }: ScreenProps) {
   const { polling, error, signIn } = useClaudeOauth(distro, dispatch);
 
   return (
-    <section className="screen">
-      <h1>Sign in to Claude Code</h1>
-      <p className="screen-intro">
+    <section className="step">
+      <span className="step-eyebrow">Claude Code</span>
+      <h1 className="step-title">Sign in to Claude Code</h1>
+      <p className="step-intro">
         The bridge runs Claude Code to drive autonomous agents. Authorize it
         once in your browser — the credentials are detected automatically and
         onboarding continues.
       </p>
-      <footer className="actions">
+      <footer className="step-actions">
         <button
           type="button"
-          className="btn-primary"
+          className="pill pill-primary"
           onClick={signIn}
           disabled={polling}
         >

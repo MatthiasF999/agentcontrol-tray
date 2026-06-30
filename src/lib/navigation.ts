@@ -12,13 +12,14 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { onAction } from '@tauri-apps/plugin-notification';
 
-export type NavRoute = 'home' | 'settings' | 'processes' | 'backlog';
+export type NavRoute = 'home' | 'settings' | 'processes' | 'backlog' | 'teams';
 
 const ROUTES: readonly NavRoute[] = [
   'home',
   'settings',
   'processes',
   'backlog',
+  'teams',
 ];
 
 export function isNavRoute(value: unknown): value is NavRoute {
