@@ -24,9 +24,21 @@ import { HomeScreen } from './screens/HomeScreen';
 import { PairScreen } from './screens/PairScreen';
 import { ProcessInstancesScreen } from './screens/ProcessInstancesScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { MyTeamsView } from './screens/teams/MyTeamsView';
 import './App.css';
 
 type View = NavRoute;
+
+// Add-24 — route to the view named by a clicked OS notification.
+function useNotificationNav(setView: (route: NavRoute) => void): void {
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void (async () => {
+      unlisten = await onNavigate((route) => setView(route));
+    })();
+    return () => unlisten?.();
+  }, [setView]);
+}
 
 function SignedInRouter() {
   useBridge();
@@ -34,15 +46,7 @@ function SignedInRouter() {
   const [view, setView] = useState<View>('home');
   const [backlogShowDigest, setBacklogShowDigest] = useState(false);
   useTraySync(status, error);
-
-  // Add-24 — route to the view named by a clicked OS notification.
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    void (async () => {
-      unlisten = await onNavigate((route) => setView(route));
-    })();
-    return () => unlisten?.();
-  }, []);
+  useNotificationNav(setView);
 
   function openBacklog(showDigest: boolean): void {
     setBacklogShowDigest(showDigest);
@@ -64,6 +68,9 @@ function SignedInRouter() {
   if (view === 'processes') {
     return <ProcessInstancesScreen onBack={() => setView('home')} />;
   }
+  if (view === 'teams') {
+    return <MyTeamsView onBack={() => setView('home')} />;
+  }
   if (view === 'backlog') {
     return (
       <BacklogConsumptionScreen
@@ -80,6 +87,7 @@ function SignedInRouter() {
       onOpenSettings={() => setView('settings')}
       onOpenProcesses={() => setView('processes')}
       onOpenBacklog={(showDigest) => openBacklog(showDigest)}
+      onOpenTeams={() => setView('teams')}
     />
   );
 }
