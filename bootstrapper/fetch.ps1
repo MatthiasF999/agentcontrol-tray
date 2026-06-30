@@ -39,7 +39,7 @@ try {
 } catch { }
 
 W 'pct.txt' '0'
-W 'phase.txt' 'Fetching manifest...'
+W 'phase.txt' 'Connecting...'
 
 try {
   $manifest = Invoke-RestMethod -UseBasicParsing -Uri $ManifestUrl -TimeoutSec 30
@@ -78,7 +78,7 @@ try {
 }
 
 W 'pct.txt' '100'
-W 'phase.txt' 'Verifying integrity...'
+W 'phase.txt' 'Verifying...'
 
 $actual = (Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash
 if ($actual -ine $sha) {
