@@ -14,6 +14,19 @@ when releases ship through the operator-portal.
 
 ## [Unreleased]
 
+### Added
+- Phase 63 — **Windows bootstrapper.** A tiny (~106 KB) version-stable
+  `setup.exe` served at one fixed URL
+  (`https://install.agent-control.io/setup.exe`) always installs the
+  latest tray (Chrome `ChromeSetup.exe` pattern). It reads
+  `install.agent-control.io/latest.json`, downloads the real signed
+  Tauri installer, SHA256-verifies it, and hands off with `/S`. Built
+  with stock NSIS (no third-party plugins — TLS download + JSON parse +
+  SHA256 delegated to a hidden PowerShell worker), so CI builds it on a
+  plain Linux runner. Dark UI matching the tray palette. The release
+  workflow builds + deploys `setup.exe` + `latest.json` on every tagged
+  release. See `bootstrapper/README.md`.
+
 ### Changed
 - Phase 56.3 — **migrated to the multi-subdomain production domain.** The
   default host is now `agent-control.io` (was the `178.105.244.59`
