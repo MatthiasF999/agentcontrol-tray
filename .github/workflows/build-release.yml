@@ -47,10 +47,18 @@ jobs:
             label: linux
             rust-target: x86_64-unknown-linux-gnu
             args: ''
-          - platform: macos-14   # arm64; older macos-13 = intel — pick once you know target users
+          # Universal build: lipo's aarch64 + x86_64 into one bundle so a
+          # single artifact serves both Apple Silicon and Intel Macs. The
+          # `app` bundle target is what emits the updater payload
+          # (`.app.tar.gz` + `.sig`) — `dmg` alone produces NO updater
+          # artifact, which is why v0.5.0's latest.json had no darwin keys
+          # and Macs got no auto-updates (caught by updater-validator).
+          # tauri-action writes BOTH darwin-aarch64 and darwin-x86_64 keys
+          # for a universal build, pointing at the same `.app.tar.gz`.
+          - platform: macos-14
             label: macos
-            rust-target: aarch64-apple-darwin
-            args: '--target aarch64-apple-darwin'
+            rust-target: aarch64-apple-darwin x86_64-apple-darwin
+            args: '--target universal-apple-darwin --bundles app,dmg'
           # Windows: NSIS bundle. The tray is a persistent menu-bar app
           # (Tailscale-pattern), so the install step IS what we want —
           # tray.exe lives in Programs Files + Start Menu, autoruns on
