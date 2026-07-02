@@ -220,6 +220,7 @@ pub fn run() {
             commands::oauth::poll_claude_creds,
             commands::pair::open_operator_portal,
             commands::pair::write_pair_env,
+            commands::pair::push_pair_to_bridge,
             commands::system::get_machine_label,
             commands::systemd::install_systemd_service,
             commands::systemd::restart_bridge_service,

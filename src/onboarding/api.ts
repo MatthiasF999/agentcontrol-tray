@@ -166,6 +166,21 @@ export function getMachineLabel(): Promise<string> {
   return invoke<string>('get_machine_label');
 }
 
+export function pushPairToBridge(
+  distro: string,
+  tokens: PairTokens,
+  label: string,
+): Promise<void> {
+  return invoke<void>('push_pair_to_bridge', {
+    distro,
+    refreshToken: tokens.refresh_token,
+    bridgeId: tokens.bridge_id,
+    orgId: tokens.org_id,
+    lanApiKey: tokens.lan_api_key,
+    label,
+  });
+}
+
 export function writePairEnv(
   distro: string,
   refreshToken: string,
