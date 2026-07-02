@@ -44,16 +44,30 @@ Matches the tray palette: `#0e1116` background, `#818cf8` brand text,
 `#4f46e5` progress accent. `XPStyle off` so the progress bar honours the custom
 colors instead of the Aero theme.
 
+Phase 63b makes the window **frameless** (Chrome-installer style): the native
+caption — title bar, "AgentControl Setup" title text, and the top-left window
+icon — is stripped via `SetWindowLong`, leaving only custom `—` / `✕` buttons
+floating in the top-right and a drag-from-anywhere body. There is no live
+`WndProc` subclass (NSIS System-plugin callbacks can't safely service
+OS-dispatched window messages during `nsDialogs::Show`); instead a 30 ms
+interaction timer polls the cursor + mouse-button state to drive hover, click,
+and the drag (`ReleaseCapture` + `WM_NCLBUTTONDOWN`/`HTCAPTION`). Still zero
+third-party plugins.
+
 ```
-┌─────────────────────────────────────────────┐
-│                                             │  ← #0e1116
-│                                             │
-│            AgentControl                     │  ← #818cf8, 22pt bold
-│                                             │
-│       Downloading AgentControl 0.5.0...     │  ← #94a3b8
-│       ████████████████░░░░░░░░░░░░          │  ← #4f46e5 on #0e1116
-│                                             │
-└─────────────────────────────────────────────┘
+                                       ┌──────┬──────┐
+                                       │  —   │  ✕   │  ← floating min + close
+                                       └──────┴──────┘     (subtle hover)
+
+                    [ app icon ]                          ← #0e1116, no caption
+
+                   AgentControl                           ← #818cf8, 20pt bold
+
+            Downloading AgentControl 0.5.0...             ← #94a3b8
+            ████████████████░░░░░░░░░░░░                  ← #4f46e5 on #0e1116
+                        62%
+
+        (drag the body anywhere to move the window)
 ```
 
 ## Build

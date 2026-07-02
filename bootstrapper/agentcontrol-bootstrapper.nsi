@@ -1,4 +1,4 @@
-; AgentControl Windows bootstrapper  (Phase 63 / UI polish 63a)
+﻿; AgentControl Windows bootstrapper  (Phase 63 / UI 63a / frameless 63b)
 ; ---------------------------------------------------------------------------
 ; A tiny, version-stable installer entry point. ONE URL
 ;   https://install.agent-control.io/setup.exe
@@ -13,12 +13,26 @@
 ; Win10/11. NSIS owns the dark UI + a real, live progress bar fed from the
 ; worker's pct.txt. Only NSIS-bundled plugins (nsDialogs, System) are used ->
 ; builds anywhere makensis runs, including Linux CI. Zero third-party plugins.
+;
+; Phase 63b — Chrome-installer-style frameless window: the native caption is
+; stripped (no title bar / title text / app icon), replaced by custom min +
+; close buttons floating top-right, and the whole body is draggable.
+;
+; Why no live WndProc subclass: the NSIS System plugin's callbacks are
+; single-threaded and only run while NSIS itself is parked inside a plugin
+; call -- they cannot reliably service the OS-dispatched WindowProc messages
+; that arrive during nsDialogs::Show. A half-working subclass that returns the
+; wrong value for an unhandled message bricks the window, and this is only
+; verifiable on Windows. So instead a cheap 30ms interaction timer polls the
+; cursor + mouse-button state and drives hover, click, and drag itself. Same
+; user-visible result (drag-from-anywhere except the two buttons, subtle
+; button hover), zero third-party plugins, no risk of an unusable window.
 ; ---------------------------------------------------------------------------
 
 Unicode true
 ManifestDPIAware true
 Name "AgentControl"
-Caption "AgentControl Setup"
+Caption " "            ; frameless -> never shown; blank as a belt-and-braces
 OutFile "agentcontrol-bootstrapper.exe"
 ; Tauri installs per-user (currentUser) -> no admin, no UAC prompt.
 RequestExecutionLevel user
@@ -43,15 +57,29 @@ XPStyle off            ; classic controls so PBM_SET*COLOR is honored
 !define CLR_MUTED   0x94A3B8   ; #94a3b8 secondary text
 !define CLR_ACCENT  0x818CF8   ; #818cf8 brand accent
 !define CLR_ERR     0xF87171   ; #f87171 error text
+!define CLR_BTNHOVER 0x1E2530  ; subtle lift on button hover
 !define PB_BAR      0xE5464F   ; #4f46e5 as BGR
 !define PB_BK       0x16110E   ; #0e1116 as BGR
 
 ; control styles
 !define SS_CENTER_   0x00000001
+!define SS_NOTIFY_   0x00000100
+!define SS_CENTERIMAGE_ 0x00000200
 !define WS_CHILD_    0x40000000
 !define WS_VISIBLE_  0x10000000
 ; SetWindowPos: SWP_NOZORDER|SWP_NOACTIVATE
 !define SWP_FLAGS    0x0014
+; SetWindowPos: SWP_FRAMECHANGED|SWP_NOZORDER|SWP_NOACTIVATE (move+size kept)
+!define SWP_FRAMED   0x0034
+
+; frameless window manipulation  (GWL_STYLE comes from WinMessages.nsh)
+!define WS_CAPTION_      0x00C00000
+!define WS_CAPTION_MASK_ 0xFF3FFFFF   ; ~WS_CAPTION
+!define WS_MINIMIZEBOX_  0x00020000
+; WM_NCLBUTTONDOWN comes from WinMessages.nsh
+!define HTCAPTION_       2
+!define SW_MINIMIZE_     6
+!define VK_LBUTTON_      1
 
 !ifndef PBM_SETRANGE32
   !define PBM_SETRANGE32  0x406
@@ -80,6 +108,12 @@ Var ChildExe
 Var BrandFont
 Var StatusFont
 Var PctFont
+Var BtnMin
+Var BtnClose
+Var BtnFont
+Var HotMin
+Var HotClose
+Var DragWasDown
 
 Page custom BootPageShow
 
@@ -87,18 +121,25 @@ Function .onInit
   InitPluginsDir
 FunctionEnd
 
-; Grow the whole installer window to WIN_W x WIN_H and recenter it on the
-; primary monitor, then stretch the page-content placeholder (id 1018) to
-; cover the full client area. Must run BEFORE nsDialogs::Create so the page
-; dialog is sized to the enlarged placeholder.
+; Strip the native caption (title bar + title text + window icon) so the
+; window is frameless, keeping the minimize-box style bit. Then grow the
+; window to WIN_W x WIN_H, recenter it on the primary monitor, and stretch
+; the page-content placeholder (id 1018) to the full client area. Runs BEFORE
+; nsDialogs::Create so the page dialog is sized to the enlarged placeholder.
 Function ResizeWindow
+  System::Call 'user32::GetWindowLongW(p $HWNDPARENT, i ${GWL_STYLE})i.r0'
+  IntOp $0 $0 & ${WS_CAPTION_MASK_}
+  IntOp $0 $0 | ${WS_MINIMIZEBOX_}
+  System::Call 'user32::SetWindowLongW(p $HWNDPARENT, i ${GWL_STYLE}, i r0)'
+
   System::Call 'user32::GetSystemMetrics(i 0)i.r2'   ; SM_CXSCREEN
   System::Call 'user32::GetSystemMetrics(i 1)i.r3'   ; SM_CYSCREEN
   IntOp $2 $2 - ${WIN_W}
   IntOp $2 $2 / 2
   IntOp $3 $3 - ${WIN_H}
   IntOp $3 $3 / 2
-  System::Call 'user32::SetWindowPos(p $HWNDPARENT, p 0, i $2, i $3, i ${WIN_W}, i ${WIN_H}, i ${SWP_FLAGS})'
+  ; SWP_FRAMECHANGED so the stripped caption takes effect immediately.
+  System::Call 'user32::SetWindowPos(p $HWNDPARENT, p 0, i $2, i $3, i ${WIN_W}, i ${WIN_H}, i ${SWP_FRAMED})'
   GetDlgItem $0 $HWNDPARENT 1018
   System::Call 'user32::SetWindowPos(p $0, p 0, i 0, i 0, i ${WIN_W}, i ${WIN_H}, i ${SWP_FLAGS})'
 FunctionEnd
@@ -112,6 +153,18 @@ Function CenterIcon
   IntOp $2 $2 - 64
   IntOp $2 $2 / 2
   System::Call 'user32::SetWindowPos(p $IconCtl, p 0, i $2, i 34, i 64, i 64, i ${SWP_FLAGS})'
+FunctionEnd
+
+; Float the custom min + close buttons in the top-right corner (px coords).
+Function PlaceButtons
+  System::Call '*(i,i,i,i)p.r1'
+  System::Call 'user32::GetClientRect(p $Dialog, p r1)'
+  System::Call '*$1(i,i,i.r2,i)'                      ; r2 = client width
+  System::Free $1
+  IntOp $3 $2 - 34                                    ; close: 30px wide, 4px margin
+  System::Call 'user32::SetWindowPos(p $BtnClose, p 0, i $3, i 4, i 30, i 22, i ${SWP_FLAGS})'
+  IntOp $3 $3 - 32                                    ; min: left of close
+  System::Call 'user32::SetWindowPos(p $BtnMin, p 0, i $3, i 4, i 30, i 22, i ${SWP_FLAGS})'
 FunctionEnd
 
 Function BootPageShow
@@ -135,6 +188,7 @@ Function BootPageShow
   CreateFont $BrandFont  "Segoe UI" "20" "700"
   CreateFont $StatusFont "Segoe UI" "9"  "400"
   CreateFont $PctFont    "Segoe UI" "9"  "700"
+  CreateFont $BtnFont    "Segoe UI" "12" "400"
 
   ; --- app icon (centered above the title) ---
   File "/oname=$PLUGINSDIR\icon64.bmp" "icon64.bmp"
@@ -180,10 +234,114 @@ Function BootPageShow
   SetCtlColors $LblPct ${CLR_ACCENT} ${CLR_BG}
   SendMessage $LblPct ${WM_SETFONT} $PctFont 1
 
+  ; --- frameless window buttons (custom min + close, floating top-right) ---
+  nsDialogs::CreateControl STATIC \
+    "${WS_CHILD_}|${WS_VISIBLE_}|${SS_NOTIFY_}|${SS_CENTER_}|${SS_CENTERIMAGE_}" "0" \
+    0 0 30 22 "—"
+  Pop $BtnMin
+  SetCtlColors $BtnMin ${CLR_MUTED} ${CLR_BG}
+  SendMessage $BtnMin ${WM_SETFONT} $BtnFont 1
+
+  nsDialogs::CreateControl STATIC \
+    "${WS_CHILD_}|${WS_VISIBLE_}|${SS_NOTIFY_}|${SS_CENTER_}|${SS_CENTERIMAGE_}" "0" \
+    0 0 30 22 "✕"
+  Pop $BtnClose
+  SetCtlColors $BtnClose ${CLR_MUTED} ${CLR_BG}
+  SendMessage $BtnClose ${WM_SETFONT} $BtnFont 1
+
+  StrCpy $HotMin 0
+  StrCpy $HotClose 0
+  StrCpy $DragWasDown 1      ; swallow the launching click until first release
+  Call PlaceButtons
+  ${NSD_CreateTimer} UiTick 30
+
   File "/oname=$PLUGINSDIR\fetch.ps1" "fetch.ps1"
   Call StartWorker
 
   nsDialogs::Show
+FunctionEnd
+
+; 30ms interaction loop: drives button hover + click + drag-from-anywhere
+; without a WndProc subclass (see header). Uses screen-coordinate hit-tests
+; against the live control rects, so it stays correct after PlaceButtons.
+Function UiTick
+  ; --- cursor position (screen coords) -> $6,$7 ---
+  System::Call '*(i,i)p.r5'
+  System::Call 'user32::GetCursorPos(p r5)'
+  System::Call '*$5(i.r6,i.r7)'
+  System::Free $5
+
+  ; --- hover: minimize ---
+  StrCpy $9 $BtnMin
+  Call RectHit                                        ; -> $8
+  ${If} $8 != $HotMin
+    StrCpy $HotMin $8
+    ${If} $8 == 1
+      SetCtlColors $BtnMin ${CLR_TEXT} ${CLR_BTNHOVER}
+    ${Else}
+      SetCtlColors $BtnMin ${CLR_MUTED} ${CLR_BG}
+    ${EndIf}
+    System::Call 'user32::InvalidateRect(p $BtnMin, p 0, i 1)'
+  ${EndIf}
+
+  ; --- hover: close ---
+  StrCpy $9 $BtnClose
+  Call RectHit
+  ${If} $8 != $HotClose
+    StrCpy $HotClose $8
+    ${If} $8 == 1
+      SetCtlColors $BtnClose ${CLR_TEXT} ${CLR_BTNHOVER}
+    ${Else}
+      SetCtlColors $BtnClose ${CLR_MUTED} ${CLR_BG}
+    ${EndIf}
+    System::Call 'user32::InvalidateRect(p $BtnClose, p 0, i 1)'
+  ${EndIf}
+
+  ; --- left-button down-edge -> click a button or start a drag ---
+  System::Call 'user32::GetAsyncKeyState(i ${VK_LBUTTON_})i.r0'
+  IntOp $0 $0 & 0x8000
+  ${If} $0 == 0
+    StrCpy $DragWasDown 0
+    Return
+  ${EndIf}
+  ${If} $DragWasDown == 1
+    Return                                            ; still held; no new edge
+  ${EndIf}
+  StrCpy $DragWasDown 1
+
+  ${If} $HotClose == 1
+    ${NSD_KillTimer} UiTick
+    ${NSD_KillTimer} BootTick
+    Quit
+  ${ElseIf} $HotMin == 1
+    System::Call 'user32::ShowWindow(p $HWNDPARENT, i ${SW_MINIMIZE_})'
+  ${Else}
+    ; drag only when the press is inside our window body
+    StrCpy $9 $HWNDPARENT
+    Call RectHit
+    ${If} $8 == 1
+      System::Call 'user32::ReleaseCapture()'
+      SendMessage $HWNDPARENT ${WM_NCLBUTTONDOWN} ${HTCAPTION_} 0
+      StrCpy $DragWasDown 0                           ; move loop consumed the press
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+
+; Hit-test: is cursor ($6,$7 screen) inside window $9 ? -> $8 (1/0).
+; Clobbers $0-$4.
+Function RectHit
+  System::Call '*(i,i,i,i)p.r4'
+  System::Call 'user32::GetWindowRect(p r9, p r4)'
+  System::Call '*$4(i.r0,i.r1,i.r2,i.r3)'             ; l,t,r,b
+  System::Free $4
+  ${If} $6 >= $0
+  ${AndIf} $6 < $2
+  ${AndIf} $7 >= $1
+  ${AndIf} $7 < $3
+    StrCpy $8 1
+  ${Else}
+    StrCpy $8 0
+  ${EndIf}
 FunctionEnd
 
 ; Launch (or relaunch, on retry) the hidden PowerShell worker. Clears any
@@ -241,6 +399,7 @@ Function BootTick
     SetCtlColors $LblStatus ${CLR_ERR} ${CLR_BG}
     ${NSD_SetText} $LblStatus "Failed: $1"
     MessageBox MB_ICONSTOP|MB_RETRYCANCEL "AgentControl could not be installed.$\n$\n$1" IDRETRY retry
+    ${NSD_KillTimer} UiTick
     Quit
     retry:
       Call StartWorker
@@ -252,6 +411,7 @@ FunctionEnd
 ; POSTINSTALL hook launches the tray + onboarding, so no further UI here.
 ; A bootstrapper invoked with /S stays silent through the whole chain.
 Function RunChild
+  ${NSD_KillTimer} UiTick
   ${If} $ChildExe == ""
     MessageBox MB_ICONSTOP|MB_OK "Internal error: installer path missing."
     Quit
