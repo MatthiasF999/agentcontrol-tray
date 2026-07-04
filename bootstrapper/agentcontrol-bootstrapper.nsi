@@ -1,4 +1,4 @@
-﻿; AgentControl Windows bootstrapper  (Phase 63 / UI 63a / frameless 63b)
+﻿; AgentControl Windows bootstrapper  (Phase 63 / UI 63a / frameless 63b / light 66a)
 ; ---------------------------------------------------------------------------
 ; A tiny, version-stable installer entry point. ONE URL
 ;   https://install.agent-control.io/setup.exe
@@ -10,7 +10,7 @@
 ; Crypto / nsJSON plugins, and the bundled NSISdl cannot do HTTPS. So the
 ; three plugin-shaped jobs (TLS download, JSON parse, SHA256) are delegated
 ; to a hidden PowerShell worker (fetch.ps1) that is present on every
-; Win10/11. NSIS owns the dark UI + a real, live progress bar fed from the
+; Win10/11. NSIS owns the light UI + a real, live progress bar fed from the
 ; worker's pct.txt. Only NSIS-bundled plugins (nsDialogs, System) are used ->
 ; builds anywhere makensis runs, including Linux CI. Zero third-party plugins.
 ;
@@ -50,16 +50,16 @@ XPStyle off            ; classic controls so PBM_SET*COLOR is honored
 !define WIN_W 480
 !define WIN_H 360
 
-; --- theme (tray palette) -------------------------------------------------
+; --- theme (light palette — DESIGN-GUIDE.md, "light-only by design") -------
 ; SetCtlColors takes 0xRRGGBB; progress-bar messages take COLORREF 0x00BBGGRR.
-!define CLR_BG      0x0E1116   ; #0e1116 background
-!define CLR_TEXT    0xF1F5F9   ; #f1f5f9 primary text
-!define CLR_MUTED   0x94A3B8   ; #94a3b8 secondary text
-!define CLR_ACCENT  0x818CF8   ; #818cf8 brand accent
-!define CLR_ERR     0xF87171   ; #f87171 error text
-!define CLR_BTNHOVER 0x1E2530  ; subtle lift on button hover
-!define PB_BAR      0xE5464F   ; #4f46e5 as BGR
-!define PB_BK       0x16110E   ; #0e1116 as BGR
+!define CLR_BG      0xFAFAFC   ; Colors.canvas    #FAFAFC  page background
+!define CLR_TEXT    0x0A0A0F   ; Colors.textPrimary #0A0A0F strong ink (hover)
+!define CLR_MUTED   0x6B7280   ; Colors.textMuted #6B7280 status / secondary
+!define CLR_ACCENT  0x3E5FFF   ; Colors.accent    #3E5FFF brand + progress readout
+!define CLR_ERR     0xEF4444   ; Colors.statusError #EF4444 error text
+!define CLR_BTNHOVER 0xF6F7F9  ; Colors.subtle    #F6F7F9 button-hover surface
+!define PB_BAR      0xFF5F3E   ; Colors.accent    #3E5FFF as BGR
+!define PB_BK       0xF9F7F6   ; Colors.subtle    #F6F7F9 as BGR
 
 ; control styles
 !define SS_CENTER_   0x00000001
