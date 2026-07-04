@@ -9,6 +9,7 @@ import {
   type ProcessPhaseStatus,
 } from '../process/types';
 import { useProcessInstanceDetail } from '../process/useProcessInstanceDetail';
+import { Colors } from '../theme/tokens';
 import { ArtifactViewer } from './ArtifactViewer';
 import { ArtifactViewerFullscreen } from './ArtifactViewerFullscreen';
 
@@ -18,10 +19,10 @@ interface Props {
 }
 
 function phaseStatusColor(status: ProcessPhaseStatus): string {
-  if (status === 'done') return '#22c55e';
-  if (status === 'active') return '#3b82f6';
-  if (status === 'awaiting_review') return '#eab308';
-  return '#a1a1aa';
+  if (status === 'done') return Colors.statusDoneStrong;
+  if (status === 'active') return Colors.accent;
+  if (status === 'awaiting_review') return Colors.statusWaitStrong;
+  return Colors.statusIdleStrong;
 }
 
 function classifyPhase(
@@ -30,12 +31,12 @@ function classifyPhase(
   currentStatus: ProcessPhaseStatus,
 ): { label: string; color: string } {
   if (phase.index < currentIndex) {
-    return { label: 'done', color: '#22c55e' };
+    return { label: 'done', color: Colors.statusDoneStrong };
   }
   if (phase.index === currentIndex) {
     return { label: currentStatus, color: phaseStatusColor(currentStatus) };
   }
-  return { label: 'upcoming', color: '#d4d4d8' };
+  return { label: 'upcoming', color: Colors.statusIdle };
 }
 
 function PhaseTimeline({ instance }: { instance: ProcessInstanceRow }) {

@@ -1,6 +1,7 @@
 import { useAuth } from '../auth/AuthContext';
 import { useStandupDigest } from '../backlog/useStandupDigest';
 import { usePairingStatus } from '../bridge/usePairingStatus';
+import { Colors } from '../theme/tokens';
 import { BacklogQuickAddButton } from './BacklogQuickAddButton';
 import { ContainerControlCard } from './ContainerControlCard';
 import { RecentTasksCard } from './RecentTasksCard';
@@ -13,9 +14,9 @@ interface Props {
 }
 
 function statusColor(state: string): string {
-  if (state === 'paired') return '#22c55e';
-  if (state === 'unpaired') return '#eab308';
-  return '#ef4444';
+  if (state === 'paired') return Colors.statusDoneStrong;
+  if (state === 'unpaired') return Colors.statusWaitStrong;
+  return Colors.statusErrorStrong;
 }
 
 export function HomeScreen({
@@ -30,7 +31,9 @@ export function HomeScreen({
   const { latest: digest } = useStandupDigest(orgIdForDigest);
 
   const color =
-    error !== null ? '#ef4444' : statusColor(status?.state ?? 'expired');
+    error !== null
+      ? Colors.statusErrorStrong
+      : statusColor(status?.state ?? 'expired');
   const label =
     error !== null
       ? 'Bridge unreachable'

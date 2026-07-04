@@ -1,20 +1,21 @@
-/* Phase 60 — install wizard. Dark theme deliberately mirrors the boot
-   splash (index.html): same #0e1116 bg + #818cf8→#4f46e5 radial gradient,
-   so the hand-off from splash to wizard is seamless. Single source of
-   truth for the wizard's look; no light-mode variant. */
+@import "../theme/tokens.css";
+
+/* Phase 66b — install wizard, light-only by design (see theme/tokens.css).
+   The wizard's local aliases below map onto the canonical tokens so the
+   hand-off from the (light) boot splash to the wizard is seamless. No
+   dark-mode variant. */
 :root {
-  --bg: #0e1116;
-  --rail-bg: #12161d;
-  --elev: #1a2030;
-  --accent: #818cf8;
-  --accent-2: #4f46e5;
-  --text: #e6edf3;
-  --muted: #8b98a9;
-  --border: #2a313c;
-  --danger: #f87171;
-  --ok: #4ade80;
-  font-family:
-    system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --bg: var(--ac-canvas);
+  --rail-bg: var(--ac-surface);
+  --elev: var(--ac-surface);
+  --accent: var(--ac-accent);
+  --accent-2: var(--ac-accent-hover);
+  --text: var(--ac-text-body);
+  --muted: var(--ac-text-muted);
+  --border: var(--ac-border-strong);
+  --danger: var(--ac-status-error);
+  --ok: var(--ac-status-done-ink);
+  font-family: var(--ac-font-sans);
   color: var(--text);
   background: var(--bg);
 }
@@ -30,13 +31,27 @@ body {
 .wizard {
   display: flex;
   height: 100vh;
-  background: var(--bg);
+  background-color: var(--bg);
+  /* Soft cool atmosphere so the white rail + cards read as floating glass. */
+  background-image:
+    radial-gradient(
+      45% 55% at 0% 0%,
+      var(--ac-atmosphere-indigo) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      50% 45% at 100% 100%,
+      var(--ac-atmosphere-sky) 0%,
+      transparent 55%
+    );
 }
 .wizard-rail {
   width: 35%;
   min-width: 220px;
   max-width: 320px;
-  background: var(--rail-bg);
+  background: var(--ac-glass-strong);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
   border-right: 1px solid var(--border);
   padding: 32px 24px;
   display: flex;
@@ -102,8 +117,9 @@ body {
   color: #fff;
 }
 .rail-circle.rail-pending {
-  background: #1f2937;
+  background: var(--ac-subtle);
   border: 1px solid var(--border);
+  color: var(--ac-text-subtle);
 }
 .rail-circle.rail-done {
   background: radial-gradient(circle, var(--accent) 0%, var(--accent-2) 70%);
@@ -236,11 +252,16 @@ body {
 }
 .pill-primary {
   background: var(--accent);
-  color: #0e1116;
+  color: #fff;
   border-color: var(--accent);
+  box-shadow: var(--ac-accent-halo);
 }
 .pill-primary:hover:not(:disabled) {
-  background: #93a0fb;
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+.pill-primary:disabled {
+  box-shadow: none;
 }
 .pill-ghost {
   background: transparent;
@@ -357,9 +378,9 @@ body {
 }
 
 .step-error-banner {
-  background: rgba(248, 113, 113, 0.12);
-  border: 1px solid rgba(248, 113, 113, 0.4);
-  color: #fca5a5;
+  background: var(--ac-status-error-tint);
+  border: 1px solid var(--ac-status-error);
+  color: var(--ac-status-error-ink);
   padding: 10px 14px;
   border-radius: 8px;
   font-size: 13px;
@@ -402,9 +423,11 @@ body {
 }
 
 /* ---- log stream ---- */
+/* Terminal output stays on a dark surface (VS-Code-parity) even in the light
+   wizard — the one sanctioned dark surface, matching the app's codeBg token. */
 .log-stream {
-  background: #0a0d12;
-  color: #cbd5e1;
+  background: #1e1e1e;
+  color: #d4d4d4;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 14px;

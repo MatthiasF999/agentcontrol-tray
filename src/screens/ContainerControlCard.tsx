@@ -6,6 +6,7 @@ import {
   type DockerAvailability,
   type DockerRunResult,
 } from '../lib/docker';
+import { Colors } from '../theme/tokens';
 
 type Action = 'up' | 'down' | 'restart';
 
@@ -122,7 +123,13 @@ export function ContainerControlCard() {
             </pre>
           )}
           {last.result.stderr.trim().length > 0 && (
-            <pre style={{ fontSize: 12, overflow: 'auto', color: '#b91c1c' }}>
+            <pre
+              style={{
+                fontSize: 12,
+                overflow: 'auto',
+                color: Colors.statusErrorInk,
+              }}
+            >
               {last.result.stderr}
             </pre>
           )}
