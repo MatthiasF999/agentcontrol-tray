@@ -1,17 +1,22 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { type AutonomousTask, useRecentTasks } from '../bridge/useRecentTasks';
+import { Colors } from '../theme/tokens';
 
 interface Props {
   orgId: string;
 }
 
 function statusBadge(status: string): { bg: string; fg: string } {
-  if (status === 'executing') return { bg: '#dbeafe', fg: '#1e3a8a' };
-  if (status === 'completed') return { bg: '#dcfce7', fg: '#14532d' };
-  if (status === 'failed') return { bg: '#fee2e2', fg: '#991b1b' };
-  if (status === 'awaiting_approval') return { bg: '#fef3c7', fg: '#78350f' };
-  return { bg: '#e4e4e7', fg: '#27272a' };
+  if (status === 'executing')
+    return { bg: Colors.statusInfoTint, fg: Colors.statusInfoInk };
+  if (status === 'completed')
+    return { bg: Colors.statusDoneTint, fg: Colors.statusDoneInk };
+  if (status === 'failed')
+    return { bg: Colors.statusErrorTint, fg: Colors.statusErrorInk };
+  if (status === 'awaiting_approval')
+    return { bg: Colors.statusWaitTint, fg: Colors.statusWaitInk };
+  return { bg: Colors.statusIdleTint, fg: Colors.statusIdleInk };
 }
 
 function formatWhen(iso: string): string {

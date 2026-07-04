@@ -8,6 +8,7 @@ import { useBacklogItems } from '../backlog/useBacklogItems';
 import { useBacklogReleases } from '../backlog/useBacklogReleases';
 import { useStandupDigest } from '../backlog/useStandupDigest';
 import { usePairingStatus } from '../bridge/usePairingStatus';
+import { Colors } from '../theme/tokens';
 import { BacklogQuickAddButton } from './BacklogQuickAddButton';
 import { DigestModal } from './DigestModal';
 
@@ -16,27 +17,33 @@ interface Props {
   showDigestOnOpen?: boolean;
 }
 
+const ERROR = { bg: Colors.statusErrorTint, fg: Colors.statusErrorInk };
+const WAIT = { bg: Colors.statusWaitTint, fg: Colors.statusWaitInk };
+const INFO = { bg: Colors.statusInfoTint, fg: Colors.statusInfoInk };
+const IDLE = { bg: Colors.statusIdleTint, fg: Colors.statusIdleInk };
+const DONE = { bg: Colors.statusDoneTint, fg: Colors.statusDoneInk };
+
 const PRIORITY_COLOR: Record<string, { bg: string; fg: string }> = {
-  P0: { bg: '#fee2e2', fg: '#991b1b' },
-  P1: { bg: '#fef3c7', fg: '#78350f' },
-  P2: { bg: '#dbeafe', fg: '#1e3a8a' },
-  P3: { bg: '#e4e4e7', fg: '#27272a' },
+  P0: ERROR,
+  P1: WAIT,
+  P2: INFO,
+  P3: IDLE,
 };
 
 const STATE_COLOR: Record<string, { bg: string; fg: string }> = {
-  idea: { bg: '#e4e4e7', fg: '#27272a' },
-  groomed: { bg: '#dbeafe', fg: '#1e3a8a' },
-  scheduled: { bg: '#ede9fe', fg: '#4c1d95' },
-  in_progress: { bg: '#fef3c7', fg: '#78350f' },
-  done: { bg: '#dcfce7', fg: '#14532d' },
-  released: { bg: '#d1fae5', fg: '#065f46' },
-  blocked: { bg: '#fee2e2', fg: '#991b1b' },
-  cancelled: { bg: '#f4f4f5', fg: '#71717a' },
+  idea: IDLE,
+  groomed: INFO,
+  scheduled: INFO,
+  in_progress: WAIT,
+  done: DONE,
+  released: DONE,
+  blocked: ERROR,
+  cancelled: IDLE,
 };
 
 function Badge({ kind, value }: { kind: 'priority' | 'state'; value: string }) {
   const map = kind === 'priority' ? PRIORITY_COLOR : STATE_COLOR;
-  const c = map[value] ?? { bg: '#e4e4e7', fg: '#27272a' };
+  const c = map[value] ?? IDLE;
   return (
     <span className="badge" style={{ backgroundColor: c.bg, color: c.fg }}>
       {value}

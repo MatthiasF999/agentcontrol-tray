@@ -19,6 +19,7 @@ import {
   parseChangelog,
 } from '../lib/changelog';
 import { CHANGELOG_BUNDLED_MARKDOWN } from '../lib/changelogBundled';
+import { Colors } from '../theme/tokens';
 
 const SECTION_ORDER: ChangelogSectionKey[] = [
   'added',
@@ -67,9 +68,11 @@ function EntryCard({ entry }: { entry: ChangelogEntry }) {
       style={{
         marginTop: 12,
         padding: '10px 12px',
-        borderRadius: 6,
-        border: isUnreleased ? '1.5px solid #6366f1' : '1px solid #2a2a2a',
-        background: 'rgba(0,0,0,0.15)',
+        borderRadius: 12,
+        border: isUnreleased
+          ? `1.5px solid ${Colors.accent}`
+          : `1px solid ${Colors.border}`,
+        background: Colors.subtle,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>

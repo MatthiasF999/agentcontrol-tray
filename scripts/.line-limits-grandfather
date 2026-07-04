@@ -34,17 +34,20 @@ src/process/useProcessInstanceDetail.ts:31
 src/process/useProcessInstanceDetail.ts:80
 src/process/useProjectsWithInstances.ts:29
 
-# screens/ — Phase 27/28/32/38 screens; large JSX trees + handlers
+# screens/ — Phase 27/28/32/38 screens; large JSX trees + handlers.
+# Some line refs shifted in Phase 66b (light-theme repaint added a token
+# import / colour constants above these functions); refs updated in lockstep
+# — the functions themselves were not grown, only relocated a few lines down.
 src/screens/ArtifactViewer.tsx:27
-src/screens/BacklogConsumptionScreen.tsx:132
-src/screens/ContainerControlCard.tsx:18
-src/screens/HomeScreen.tsx:21
+src/screens/BacklogConsumptionScreen.tsx:139
+src/screens/ContainerControlCard.tsx:19
+src/screens/HomeScreen.tsx:22
 src/screens/PairScreen.tsx:8
-src/screens/ProcessInstanceDetail.tsx:98
+src/screens/ProcessInstanceDetail.tsx:99
 src/screens/ProcessInstancesScreen.tsx:55
 src/screens/ProcessInstancesScreen.tsx:107
 src/screens/QuickAddIdeaSheet.tsx:13
 src/screens/QuickPair.tsx:14
-src/screens/RecentTasksCard.tsx:28
+src/screens/RecentTasksCard.tsx:33
 src/screens/SettingsScreen.tsx:19
 src/screens/UpdaterCard.tsx:8

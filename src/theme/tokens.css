@@ -1,0 +1,102 @@
+/* Canonical AgentControl design tokens — light-only by design.
+   Mirrors agentcontrol-app/src/theme (colors.ts / typography.ts / index.ts)
+   so the tray shares one visual language with the mobile app. This file is
+   the single source of truth for hex values in the tray: never hard-code a
+   colour outside src/theme — reference a var(--ac-*) token instead.
+
+   Philosophy: calm by default. White surfaces, generous space, one accent
+   (#3E5FFF), frosted glass over a soft per-view atmosphere. Hierarchy comes
+   from weight + space, not colour. */
+:root {
+  /* Surfaces */
+  --ac-canvas: #fafafc;
+  --ac-surface: #ffffff;
+  --ac-subtle: #f6f7f9;
+
+  /* Glass — translucent white overlays used over the atmosphere */
+  --ac-glass: rgba(255, 255, 255, 0.55);
+  --ac-glass-strong: rgba(255, 255, 255, 0.68);
+  --ac-glass-card: rgba(255, 255, 255, 0.62);
+  --ac-glass-hairline: rgba(255, 255, 255, 0.85);
+  --ac-border-glass: rgba(255, 255, 255, 0.65);
+  --ac-border-glass-edge: rgba(255, 255, 255, 0.4);
+
+  /* Scrim — full-screen dim behind modals/sheets (slate-tinted, not black) */
+  --ac-scrim: rgba(15, 23, 42, 0.4);
+  --ac-scrim-strong: rgba(15, 23, 42, 0.62);
+
+  /* Borders */
+  --ac-border: rgba(15, 23, 42, 0.08);
+  --ac-border-strong: rgba(15, 23, 42, 0.12);
+
+  /* Text hierarchy */
+  --ac-text-primary: #0a0a0f;
+  --ac-text-body: #1f2937;
+  --ac-text-muted: #6b7280;
+  --ac-text-subtle: #9ca3af;
+
+  /* Brand accent — the one accent, carries every primary affordance */
+  --ac-accent: #3e5fff;
+  --ac-accent-hover: #2d4aff;
+  --ac-accent-tint: rgba(62, 95, 255, 0.1);
+  --ac-accent-tint2: rgba(62, 95, 255, 0.2);
+  --ac-accent-soft: #e8edff;
+
+  /* Status — soft (tint bg + ink text) pairs + WCAG-AA strong dots */
+  --ac-status-run: #f97316;
+  --ac-status-run-tint: rgba(249, 115, 22, 0.1);
+  --ac-status-run-ink: #c2410c;
+  --ac-status-wait: #eab308;
+  --ac-status-wait-tint: rgba(234, 179, 8, 0.12);
+  --ac-status-wait-ink: #a16207;
+  --ac-status-done: #10b981;
+  --ac-status-done-tint: rgba(16, 185, 129, 0.1);
+  --ac-status-done-ink: #047857;
+  --ac-status-error: #ef4444;
+  --ac-status-error-tint: rgba(239, 68, 68, 0.1);
+  --ac-status-error-ink: #b91c1c;
+  --ac-status-idle: #94a3b8;
+  --ac-status-idle-tint: rgba(148, 163, 184, 0.1);
+  --ac-status-idle-ink: #64748b;
+  --ac-status-info-tint: rgba(62, 95, 255, 0.1);
+  --ac-status-info-ink: #1e3a8a;
+
+  /* Section atmosphere — soft pastel radial-gradient base (cool, focused) */
+  --ac-atmosphere-indigo: #c7d2fe;
+  --ac-atmosphere-sky: #bfdbfe;
+  --ac-atmosphere-violet: #ddd6fe;
+  --ac-atmosphere-base-indigo: #eef2ff;
+  --ac-atmosphere-base-sky: #f0f9ff;
+
+  /* Spacing — 4-pt grid */
+  --ac-space-xs: 4px;
+  --ac-space-sm: 8px;
+  --ac-space-md: 12px;
+  --ac-space-base: 16px;
+  --ac-space-lg: 20px;
+  --ac-space-xl: 24px;
+  --ac-space-xxl: 32px;
+
+  /* Border radius */
+  --ac-radius-sm: 8px;
+  --ac-radius-md: 12px;
+  --ac-radius-lg: 16px;
+  --ac-radius-xl: 22px;
+  --ac-radius-pill: 999px;
+
+  /* Elevation — neutral soft shadows (slate-tinted for light surfaces) */
+  --ac-elev-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --ac-elev-md: 0 4px 12px rgba(15, 23, 42, 0.06);
+  --ac-elev-lg: 0 16px 32px rgba(15, 23, 42, 0.1);
+  /* Accent halo — the only sanctioned tinted shadow ("press me" glow) */
+  --ac-accent-halo: 0 8px 18px rgba(62, 95, 255, 0.32);
+
+  /* Type — Geist is the app's family; the tray ships Inter as the closest
+     web-native fallback until a bundled Geist face lands (Phase 66c). */
+  --ac-font-sans:
+    Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  --ac-font-mono:
+    ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+    monospace;
+}

@@ -1,4 +1,5 @@
 import { useOrgTeams } from '../../bridge/useTeams';
+import { Colors } from '../../theme/tokens';
 
 interface Props {
   bridgeId: string;
@@ -38,8 +39,8 @@ export function BridgeShareControls({
               className="badge"
               style={{
                 cursor: 'pointer',
-                backgroundColor: shared ? '#dcfce7' : '#e5e7eb',
-                color: shared ? '#14532d' : '#374151',
+                backgroundColor: shared ? Colors.statusDoneTint : Colors.subtle,
+                color: shared ? Colors.statusDoneInk : Colors.textBody,
               }}
               onClick={() =>
                 void (shared

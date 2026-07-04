@@ -1,5 +1,6 @@
 import type { BridgeShare } from '../bridge/useBridgeShares';
 import type { BridgeRow } from '../bridge/useBridgesList';
+import { Colors } from '../theme/tokens';
 import { BridgeShareControls } from './teams/BridgeShareControls';
 
 interface Props {
@@ -28,6 +29,36 @@ function ownershipLabel(owned: boolean, shares: BridgeShare[]): string {
   return 'Shared with you';
 }
 
+function BridgeBadges({
+  owned,
+  shares,
+  isCurrent,
+}: {
+  owned: boolean;
+  shares: BridgeShare[];
+  isCurrent: boolean;
+}) {
+  const ownStyle = owned
+    ? { backgroundColor: Colors.statusInfoTint, color: Colors.statusInfoInk }
+    : { backgroundColor: Colors.statusWaitTint, color: Colors.statusWaitInk };
+  const hereStyle = {
+    backgroundColor: Colors.statusDoneTint,
+    color: Colors.statusDoneInk,
+  };
+  return (
+    <>
+      <span className="badge" style={ownStyle}>
+        {ownershipLabel(owned, shares)}
+      </span>
+      {isCurrent && (
+        <span className="badge" style={hereStyle}>
+          this machine
+        </span>
+      )}
+    </>
+  );
+}
+
 export function BridgeListItem({
   bridge,
   owned,
@@ -40,23 +71,7 @@ export function BridgeListItem({
     <li className="task-row">
       <div className="task-row-head">
         <span>{bridge.name ?? '(unnamed)'}</span>
-        <span
-          className="badge"
-          style={{
-            backgroundColor: owned ? '#dbeafe' : '#fef9c3',
-            color: owned ? '#1e3a8a' : '#713f12',
-          }}
-        >
-          {ownershipLabel(owned, shares)}
-        </span>
-        {isCurrent && (
-          <span
-            className="badge"
-            style={{ backgroundColor: '#dcfce7', color: '#14532d' }}
-          >
-            this machine
-          </span>
-        )}
+        <BridgeBadges owned={owned} shares={shares} isCurrent={isCurrent} />
       </div>
       <dl className="kv">
         <dt>Bridge ID</dt>

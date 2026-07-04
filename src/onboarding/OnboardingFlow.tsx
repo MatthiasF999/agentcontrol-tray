@@ -1,4 +1,5 @@
 import { type ReactElement, useReducer } from 'react';
+import './onboarding.css';
 import { WizardShell } from './components/WizardShell';
 import { ClaudeAuth } from './screens/ClaudeAuth';
 import { Done } from './screens/Done';
