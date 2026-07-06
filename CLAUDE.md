@@ -88,6 +88,37 @@ innards).
 See `README.md` for the system-deps list (Linux needs
 `libwebkit2gtk-4.1-dev` + friends) and the cross-platform build matrix.
 
+## Design system (light-only, one accent, glass-over-atmosphere)
+
+The tray mirrors `agentcontrol-app`'s visual language so the two feel like one
+product. Canonical rationale — the *why* behind every rule — lives in the
+sibling repo at `agentcontrol-app/docs/DESIGN-GUIDE.md`. The tray follows it;
+it does not fork it.
+
+- **Source of truth:** `src/theme/tokens.css` (every `var(--ac-*)` custom
+  property) and its TS mirror `src/theme/tokens.ts` (`Colors.*` for inline
+  `style={{}}`). Keep the two in sync. Light-only by design — no dark mode, no
+  `prefers-color-scheme` branch.
+- **Font:** Geist Variable, bundled as a self-hosted WOFF2 at
+  `public/fonts/GeistVariable.woff2` (Vercel's Geist, SIL OFL 1.1 — see the
+  co-located `Geist-LICENSE.txt`). Declared via `@font-face` in `tokens.css`;
+  referenced only through `--ac-font-sans` (Inter + system-ui remain as
+  pre-swap fallbacks).
+- **Never hard-code a colour outside `src/theme/`** — reference a `var(--ac-*)`
+  token (CSS) or a `Colors.*` value (inline TSX).
+
+### Enforcement layers
+
+1. **Mechanical:** `scripts/check-design-tokens.mjs` (run by `pnpm lint`) fails
+   on raw hex / `rgb()` / `rgba()` / `hsl()` literals in `.ts` / `.tsx` outside
+   `src/theme/`. Escape hatch: `// design-token:allow -- reason: <why>` (line)
+   or `// design-token:allow-file -- reason: <why>` (file).
+2. **Agent:** `.claude/agents/design-guard.md` reviews the softer patterns
+   (light-only, one-accent, no decorative gradients on cards, typography via
+   the font token, cross-screen consistency).
+3. **Command:** `/design-review [path]` spawns design-guard against changed
+   files (or an explicit target). Run before committing UI changes.
+
 ## Constraints (carry-over from main AgentControl project)
 
 - No Apple Developer / Google Play accounts required (local-deploy only)

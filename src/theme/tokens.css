@@ -7,6 +7,19 @@
    Philosophy: calm by default. White surfaces, generous space, one accent
    (#3E5FFF), frosted glass over a soft per-view atmosphere. Hierarchy comes
    from weight + space, not colour. */
+
+/* Geist Variable — the app's family, bundled as a self-hosted WOFF2 so the
+   tray matches agentcontrol-app instead of falling back to Inter. Vercel's
+   Geist, SIL OFL 1.1 (see public/fonts/Geist-LICENSE.txt). Variable weight
+   axis 100–900; `font-display: swap` paints Inter first, then upgrades. */
+@font-face {
+  font-family: "Geist Variable";
+  src: url("/fonts/GeistVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Surfaces */
   --ac-canvas: #fafafc;
@@ -91,11 +104,12 @@
   /* Accent halo — the only sanctioned tinted shadow ("press me" glow) */
   --ac-accent-halo: 0 8px 18px rgba(62, 95, 255, 0.32);
 
-  /* Type — Geist is the app's family; the tray ships Inter as the closest
-     web-native fallback until a bundled Geist face lands (Phase 66c). */
+  /* Type — Geist is the app's family, bundled as a self-hosted variable
+     WOFF2 (see @font-face above). Inter + system-ui remain as fallbacks
+     for the pre-swap paint and any load failure. */
   --ac-font-sans:
-    Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
+    "Geist Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
   --ac-font-mono:
     ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
     monospace;
