@@ -207,8 +207,16 @@ jobs:
   # from the freshly released Windows asset, and publish both to the install
   # host so `https://install.agent-control.io/setup.exe` always fetches the
   # latest. Needs only stock NSIS (no plugins) -> plain ubuntu runner.
-  bootstrapper:
-    name: Bootstrapper (setup.exe + latest.json)
+  #
+  # Phase 3 (bootstrapper-deploy-selfhosted) — split into build + deploy.
+  # The build stays on a hosted runner for reproducibility; the deploy moves
+  # to the `wsl2-tray` self-hosted runner because Hetzner's Cloud Firewall
+  # blocks GH-hosted runner egress IPs (every hosted scp hit "Connection
+  # timed out"). The self-hosted runner reaches the box over the operator's
+  # Tailnet via the `hetzner-supabase` SSH alias, so no deploy key secret is
+  # needed. Artifacts are handed off build -> deploy via upload/download.
+  bootstrapper-build:
+    name: Bootstrapper build (setup.exe + latest.json)
     needs: build
     if: >-
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
@@ -263,15 +271,59 @@ jobs:
             > bootstrapper/latest.json
           cat bootstrapper/latest.json
 
+      - name: Upload bootstrapper artifacts for deploy job
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrapper-dist
+          path: |
+            bootstrapper/setup.exe
+            bootstrapper/latest.json
+          retention-days: 1
+          if-no-files-found: error
+
+  # Deploy step lives on the self-hosted `wsl2-tray` runner so scp to the
+  # Hetzner install host succeeds over the operator's Tailnet (hosted runner
+  # IPs are firewall-blocked). No secrets: the runner host already holds the
+  # `hetzner-supabase` SSH alias + key in its own ~/.ssh/config.
+  bootstrapper-deploy:
+    name: Bootstrapper deploy (install.agent-control.io)
+    needs: bootstrapper-build
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '')
+    runs-on: self-hosted
+    permissions:
+      contents: read
+    steps:
+      - name: Download bootstrapper artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: bootstrapper-dist
+          path: dist
+
       - name: Deploy to install.agent-control.io
         env:
-          SSH_KEY: ${{ secrets.INSTALL_HOST_SSH_KEY }}
+          # SSH alias resolved by the runner host's ~/.ssh/config; reachable
+          # over Tailnet. Points at 178.105.244.59 (Hetzner CX23) or its
+          # Tailscale IP. Override via repo var if the alias ever changes.
+          HOST: ${{ vars.INSTALL_HOST_SSH_ALIAS || 'hetzner-supabase' }}
+          DEST: /opt/static-sites/install
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
-          HOST=178.105.244.59
-          SCP="scp -i $HOME/.ssh/deploy -o StrictHostKeyChecking=accept-new"
-          $SCP bootstrapper/setup.exe   root@${HOST}:/opt/static-sites/install/setup.exe
-          $SCP bootstrapper/latest.json root@${HOST}:/opt/static-sites/install/latest.json
-          echo "Deployed setup.exe + latest.json to install.agent-control.io"
+          SSH="ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+          SCP="scp -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+
+          # Idempotent nicety: setup.exe is version-stable, so skip re-scp if
+          # the remote copy already matches. latest.json carries a fresh
+          # released_at timestamp each run, so it is always re-published.
+          LOCAL_SHA=$(sha256sum dist/setup.exe | awk '{print $1}')
+          REMOTE_SHA=$($SSH "$HOST" "sha256sum ${DEST}/setup.exe 2>/dev/null | awk '{print \$1}'" || true)
+          if [ "$LOCAL_SHA" = "$REMOTE_SHA" ]; then
+            echo "setup.exe unchanged (sha256 $LOCAL_SHA) — skipping re-upload"
+          else
+            $SCP dist/setup.exe "${HOST}:${DEST}/setup.exe"
+            echo "Uploaded setup.exe (sha256 $LOCAL_SHA)"
+          fi
+
+          $SCP dist/latest.json "${HOST}:${DEST}/latest.json"
+          echo "Deployed latest.json to install.agent-control.io"
