@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AutoUnattend.xml for the Phase 66h Hyper-V test VM.
+
+  Consumed by Build-BaseImage.ps1 via Convert-WindowsImage -UnattendPath, which
+  drops it at \Windows\Panther\unattend.xml inside the freshly-applied VHDX. Its
+  job: bring a Windows 11 Enterprise Evaluation guest all the way to a logged-in
+  desktop with ZERO interaction, then hand control to First-Boot.ps1.
+
+  Only the specialize + oobeSystem passes are used. The windowsPE pass (disk
+  partitioning, WIM apply) is NOT here on purpose: Convert-WindowsImage applies
+  install.wim offline, so Windows Setup's TPM/SecureBoot gate never runs and no
+  LabConfig bypass is needed.
+
+  Local admin account "Administrator" gets a KNOWN password (below). It is a
+  throwaway eval VM reachable only over an Internal host-only vSwitch; SSH key
+  auth (baked in by First-Boot.ps1) is the real access path. Rotate/replace as
+  you like — see README.md.
+
+    Administrator password:  AgentControl!Test1
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+
+  <settings pass="specialize">
+    <component name="Microsoft-Windows-Shell-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <ComputerName>AGENTCTRL-TEST</ComputerName>
+      <TimeZone>UTC</TimeZone>
+      <!-- Skip the "let's connect you to a network" gate on 22H2+ OOBE. -->
+      <RunSynchronous>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <Path>reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE /v BypassNRO /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+      </RunSynchronous>
+    </component>
+  </settings>
+
+  <settings pass="oobeSystem">
+    <component name="Microsoft-Windows-International-Core"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <InputLocale>0409:00000409</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
+    <component name="Microsoft-Windows-Shell-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+
+      <!-- Suppress every OOBE screen so first boot lands on the desktop. -->
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <HideLocalAccountScreen>true</HideLocalAccountScreen>
+        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+        <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <ProtectYourPC>3</ProtectYourPC>
+        <SkipMachineOOBE>true</SkipMachineOOBE>
+        <SkipUserOOBE>true</SkipUserOOBE>
+      </OOBE>
+
+      <UserAccounts>
+        <LocalAccounts>
+          <LocalAccount wcm:action="add">
+            <Name>Administrator</Name>
+            <Group>Administrators</Group>
+            <DisplayName>Administrator</DisplayName>
+            <Password>
+              <Value>AgentControl!Test1</Value>
+              <PlainText>true</PlainText>
+            </Password>
+          </LocalAccount>
+        </LocalAccounts>
+      </UserAccounts>
+
+      <!-- Auto-login so First-Boot.ps1 runs unattended. LogonCount is high;
+           First-Boot.ps1 disables AutoAdminLogon once provisioning completes. -->
+      <AutoLogon>
+        <Enabled>true</Enabled>
+        <Username>Administrator</Username>
+        <LogonCount>5</LogonCount>
+        <Password>
+          <Value>AgentControl!Test1</Value>
+          <PlainText>true</PlainText>
+        </Password>
+      </AutoLogon>
+
+      <!-- Provisioning driver. -ExecutionPolicy Bypass because the file is
+           injected, unsigned. It runs from C:\provisioning (see Build-BaseImage.ps1). -->
+      <FirstLogonCommands>
+        <SynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\provisioning\First-Boot.ps1</CommandLine>
+          <Description>AgentControl base-image provisioning</Description>
+          <RequiresUserInput>false</RequiresUserInput>
+        </SynchronousCommand>
+      </FirstLogonCommands>
+
+      <RegisteredOwner>AgentControl</RegisteredOwner>
+      <RegisteredOrganization>AgentControl</RegisteredOrganization>
+    </component>
+  </settings>
+</unattend>
