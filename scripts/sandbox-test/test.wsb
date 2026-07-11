@@ -1,0 +1,26 @@
+<Configuration>
+  <!--
+    Windows Sandbox config for the AgentControl installer test.
+    Rendered by host-orchestrator.sh (paths are substituted if you move the
+    host root). staging is read-only; output is read-write so result.json +
+    screenshots survive the sandbox teardown.
+  -->
+  <VGpu>Enable</VGpu>
+  <Networking>Enable</Networking>
+  <MemoryInMB>4096</MemoryInMB>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>C:\Users\Dev\AgentControlSandbox\staging</HostFolder>
+      <SandboxFolder>C:\Users\WDAGUtilityAccount\Desktop\staging</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>C:\Users\Dev\AgentControlSandbox\output</HostFolder>
+      <SandboxFolder>C:\Users\WDAGUtilityAccount\Desktop\output</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell.exe -ExecutionPolicy Bypass -NoProfile -File C:\Users\WDAGUtilityAccount\Desktop\staging\sandbox-runner.ps1</Command>
+  </LogonCommand>
+</Configuration>
