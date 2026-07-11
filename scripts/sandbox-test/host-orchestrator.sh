@@ -51,6 +51,20 @@ stage_common() {
   log "preparing host folders under $HOST_WSL_ROOT"
   mkdir -p "$STAGING" "$OUTPUT/screenshots"
   cp "$SCRIPT_DIR/helpers.psm1" "$STAGING/helpers.psm1"
+  # Pair-flow verifier runs inside WSL after the bridge installs (wsl flow).
+  cp "$SCRIPT_DIR/../e2e-pair-verify/verify-pair-flow.mjs" "$STAGING/verify-pair-flow.mjs"
+}
+
+# The pair-flow verifier needs a service_role key. It lives in a gitignored
+# host file scripts/sandbox-test/pair-verify.env; stage it RO if present, else
+# the runner records step 'verify-pair-flow' = skip.
+stage_pair_env() {
+  if [[ -f "$SCRIPT_DIR/pair-verify.env" ]]; then
+    log "staging pair-verify.env (service_role, RO)"
+    cp "$SCRIPT_DIR/pair-verify.env" "$STAGING/pair-verify.env"
+  else
+    log "no pair-verify.env — verify-pair-flow step will be skipped in-sandbox"
+  fi
 }
 
 # Download / copy the bootstrapper — only the tray + full flows launch it.
@@ -121,6 +135,7 @@ run_flow() {
   rm -f "$OUTPUT/result.json"
   cp "$SCRIPT_DIR/$runner" "$STAGING/$runner"
   [[ "$flow" == 'tray' ]] && stage_setup_exe
+  [[ "$flow" == 'wsl' ]] && stage_pair_env
   render_wsb "$wsb"
   launch_wsb "$wsb"
   collect_result "$flow"
