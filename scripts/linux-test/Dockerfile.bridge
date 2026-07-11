@@ -1,0 +1,47 @@
+# Dockerfile.bridge — Flow A image for the AgentControl bridge Linux test.
+#
+# A booting systemd container: the real installer (wsl.sh) writes a
+# `systemctl --user` unit, so this image runs `/sbin/init` as PID 1 and
+# enables linger for a non-root test user, which starts that user's
+# `systemd --user` manager at boot. bridge-runner.sh (run via `docker exec`)
+# then drives the install exactly as an end-user would.
+#
+# Build:  docker build -f Dockerfile.bridge -t agentcontrol-test-bridge .
+# Run:    docker run -d --privileged --tmpfs /run --tmpfs /run/lock \
+#           -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+#           -v "$PWD/output:/output" --name acbridge agentcontrol-test-bridge
+#         docker exec acbridge /opt/linux-test/bridge-runner.sh
+#
+# --privileged + a booting init are REQUIRED: the installer's unit is a
+# systemd --user service, and systemctl needs a live init + cgroup mount.
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# systemd (init) + node + the installer's runtime deps. curl for the install
+# pipe and the /health smoke; sudo + dbus so the user session can come up.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      systemd systemd-sysv dbus-user-session \
+      curl ca-certificates sudo \
+      nodejs npm \
+      python3 build-essential \
+ && rm -rf /var/lib/apt/lists/*
+
+# Non-root test user. The installer refuses to run as root-only paths and the
+# unit is per-user, so drive everything as `actest`. Linger makes systemd
+# start `user@<uid>.service` at boot so `systemctl --user` works headless.
+RUN useradd --create-home --shell /bin/bash actest \
+ && echo 'actest ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/actest \
+ && mkdir -p /var/lib/systemd/linger \
+ && touch /var/lib/systemd/linger/actest
+
+COPY bridge-runner.sh /opt/linux-test/bridge-runner.sh
+RUN chmod +x /opt/linux-test/bridge-runner.sh \
+ && mkdir -p /output && chown actest:actest /output
+
+# Strip the getty/agent units that spam a container console; keep the rest.
+RUN systemctl mask systemd-logind.service getty.target console-getty.service \
+      systemd-udevd.service 2>/dev/null || true
+
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]
