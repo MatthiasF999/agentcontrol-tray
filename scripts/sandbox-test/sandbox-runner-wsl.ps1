@@ -223,6 +223,43 @@ function Step-VerifyBridge {
   throw "agentcontrol-bridge not active: $($st.Text.Trim())"
 }
 
+function Step-VerifyPairFlow {
+  # End-to-end guard for the installer magic-link -> pair-bridge return path
+  # (dogfood 2026-07-11: sign-in landed on /Main/inbox/inbox, never claimed the
+  # bridge). The verifier is zero-dependency Node run inside the freshly
+  # installed WSL. The service_role key rides in via the RO-mounted
+  # staging\pair-verify.env; when absent (the usual local case) record 'skip'
+  # rather than failing the whole sandbox run.
+  $envHost = Join-Path $staging 'pair-verify.env'
+  if (-not (Test-Path $envHost)) {
+    Add-Step 'verify-pair-flow' 'skip' 'no staging\pair-verify.env (service_role key) present' (Save-Screenshot 'pairflow-skip')
+    return
+  }
+  # /mnt/c form of the RO-mounted staging dir, as WSL sees it.
+  $mjsWsl = '/mnt/c/Users/WDAGUtilityAccount/Desktop/staging/verify-pair-flow.mjs'
+  $envWsl = '/mnt/c/Users/WDAGUtilityAccount/Desktop/staging/pair-verify.env'
+  # -lc loads the login profile so the node the bridge step installed is on PATH.
+  $cmd = "export PAIR_VERIFY_ENV='$envWsl'; node '$mjsWsl'"
+  $r = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $cmd)
+  $shot = Save-Screenshot 'pairflow'
+
+  # The verifier prints one machine-readable line: PAIRFLOW_JSON {...}. Persist
+  # it next to result.json and surface the (token-redacted) final URL.
+  $m = [regex]::Match($r.Text, 'PAIRFLOW_JSON (\{.*\})')
+  $finalUrl = ''
+  if ($m.Success) {
+    [System.IO.File]::WriteAllText((Join-Path $outputDir 'pair-flow.json'),
+      $m.Groups[1].Value, (New-Object System.Text.UTF8Encoding($false)))
+    try { $finalUrl = ($m.Groups[1].Value | ConvertFrom-Json).finalUrl } catch {}
+  }
+  if ($r.Code -eq 0) {
+    Add-Step 'verify-pair-flow' 'pass' "magic-link returned to pair-bridge: $finalUrl" $shot
+  } else {
+    Add-Step 'verify-pair-flow' 'fail' "pair-flow regression (final URL: $finalUrl): $($r.Text.Trim())" $shot
+    throw "verify-pair-flow failed: $finalUrl"
+  }
+}
+
 # ---- run --------------------------------------------------------------------
 try {
   Step-VerifyHost
@@ -232,6 +269,7 @@ try {
   Step-WaitDistro
   Step-InstallBridge
   Step-VerifyBridge
+  Step-VerifyPairFlow
   $result.pass = $true
 } catch {
   $result.errors += $_.Exception.Message
