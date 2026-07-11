@@ -1,0 +1,158 @@
+<#
+.SYNOPSIS
+  Runs ONCE inside the Phase 66h test VM at first auto-logon (invoked by the
+  AutoUnattend.xml FirstLogonCommands). Turns a bare Windows 11 Enterprise Eval
+  desktop into the golden base image: Windows OpenSSH server (key auth to the
+  injected host pubkey), WSL2 kernel, a pre-imported Ubuntu-22.04, and a `dev`
+  UNIX user with the same host pubkey. Writes C:\provisioning-complete.txt when
+  done so Build-BaseImage.ps1 (on the host) knows to snapshot.
+
+  Idempotent: safe to re-run. Everything it needs was staged into
+  C:\provisioning by Build-BaseImage.ps1 (offline VHDX injection) —
+  wsl_update_x64.msi, ubuntu-jammy.tar.gz, host_id.pub.
+
+.NOTES
+  # @line-limit-exception: single linear first-boot provisioner; splitting the
+  # OpenSSH / WSL / Ubuntu blocks across files would obscure the boot sequence.
+#>
+[CmdletBinding()]
+param(
+  [string]$ProvisioningDir = 'C:\provisioning',
+  [string]$Distro          = 'Ubuntu-22.04',
+  [string]$WslInstallDir   = 'C:\WSL\Ubuntu-22.04',
+  # Must match the dev password documented in README.md. SSH key auth is the
+  # real access path; this only exists so `su - dev` etc. work interactively.
+  [string]$DevPassword     = 'AgentControl!Test1'
+)
+
+$ErrorActionPreference = 'Stop'
+$log = 'C:\provisioning\first-boot.log'
+function Log { param([string]$m)
+  $line = "{0}  {1}" -f (Get-Date).ToUniversalTime().ToString('o'), $m
+  Add-Content -Path $log -Value $line
+  Write-Host $line
+}
+
+$pubKeyPath = Join-Path $ProvisioningDir 'host_id.pub'
+$kernelMsi  = Join-Path $ProvisioningDir 'wsl_update_x64.msi'
+$rootfsTar  = Join-Path $ProvisioningDir 'ubuntu-jammy.tar.gz'
+foreach ($f in @($pubKeyPath, $kernelMsi, $rootfsTar)) {
+  if (-not (Test-Path $f)) { throw "missing injected artifact: $f" }
+}
+$pubKey = (Get-Content -Raw $pubKeyPath).Trim()
+
+# ---- 1. OpenSSH server ------------------------------------------------------
+function Install-OpenSSHServer {
+  $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server*'
+  if ($cap.State -ne 'Installed') {
+    Add-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0' | Out-Null
+  }
+  Set-Service -Name sshd -StartupType Automatic
+  Start-Service sshd
+  # Firewall rule ships with the capability but re-assert it defensively.
+  if (-not (Get-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -DisplayName 'OpenSSH Server (sshd)' `
+      -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 | Out-Null
+  }
+  # SSH sessions get PowerShell (matches how the orchestrator drives runner-vm.ps1).
+  $pwsh = (Get-Command powershell.exe).Source
+  New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell `
+    -Value $pwsh -PropertyType String -Force | Out-Null
+  Log "OpenSSH server installed; default shell = $pwsh"
+}
+
+function Set-AdminAuthorizedKey {
+  # Admin accounts authenticate via administrators_authorized_keys, NOT the
+  # per-user ~/.ssh path. ACL must be SYSTEM + Administrators only, no inherit —
+  # sshd refuses the file otherwise.
+  $akFile = Join-Path $env:ProgramData 'ssh\administrators_authorized_keys'
+  Set-Content -Path $akFile -Value $pubKey -Encoding ascii -NoNewline
+  $acl = Get-Acl $akFile
+  $acl.SetAccessRuleProtection($true, $false)
+  foreach ($id in @('NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators')) {
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+      $id, 'FullControl', 'Allow')
+    $acl.AddAccessRule($rule)
+  }
+  Set-Acl -Path $akFile -AclObject $acl
+  Log "administrators_authorized_keys written + ACL locked to SYSTEM/Administrators"
+}
+
+# ---- 2. WSL2 kernel + Ubuntu ------------------------------------------------
+function Install-WslKernel {
+  # The two optional features WSL2 needs; already present via nested-virt but
+  # assert them so a fresh eval image is covered.
+  foreach ($feat in @('Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform')) {
+    $s = Get-WindowsOptionalFeature -Online -FeatureName $feat
+    if ($s.State -ne 'Enabled') {
+      Enable-WindowsOptionalFeature -Online -FeatureName $feat -NoRestart -All | Out-Null
+      Log "enabled optional feature $feat"
+    }
+  }
+  $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @(
+    '/i', "`"$kernelMsi`"", '/quiet', '/norestart')
+  if ($p.ExitCode -notin @(0, 3010)) {
+    throw "wsl_update_x64.msi install failed (exit $($p.ExitCode))"
+  }
+  & wsl.exe --set-default-version 2 | Out-Null
+  Log "WSL2 kernel installed; default version = 2"
+}
+
+function Import-UbuntuDistro {
+  $env:WSL_UTF8 = '1'
+  $existing = (& wsl.exe --list --quiet) -split "\r?\n" | ForEach-Object { $_.Trim() }
+  if ($existing -contains $Distro) {
+    Log "$Distro already imported; skipping"
+  } else {
+    New-Item -ItemType Directory -Force -Path $WslInstallDir | Out-Null
+    & wsl.exe --import $Distro $WslInstallDir $rootfsTar --version 2
+    if ($LASTEXITCODE -ne 0) { throw "wsl --import $Distro failed ($LASTEXITCODE)" }
+    Log "$Distro imported to $WslInstallDir"
+  }
+  & wsl.exe --set-default $Distro | Out-Null
+}
+
+function Set-UbuntuDevUser {
+  # Create dev + SSH key, make it the WSL default user (so `wsl -d <distro>`
+  # and systemd --user work), and never prompt for interactive first-run setup.
+  $bootstrap = @"
+set -e
+id dev >/dev/null 2>&1 || useradd -m -s /bin/bash -G sudo dev
+echo 'dev:$DevPassword' | chpasswd
+echo 'dev ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/dev && chmod 440 /etc/sudoers.d/dev
+install -d -m 700 -o dev -g dev /home/dev/.ssh
+printf '%s\n' '$pubKey' > /home/dev/.ssh/authorized_keys
+chmod 600 /home/dev/.ssh/authorized_keys && chown dev:dev /home/dev/.ssh/authorized_keys
+printf '[user]\ndefault=dev\n[boot]\nsystemd=true\n' > /etc/wsl.conf
+"@
+  $bootstrap = $bootstrap -replace "`r`n", "`n"
+  & wsl.exe -d $Distro -u root -e bash -lc $bootstrap
+  if ($LASTEXITCODE -ne 0) { throw "Ubuntu dev-user bootstrap failed ($LASTEXITCODE)" }
+  & wsl.exe --terminate $Distro | Out-Null   # apply wsl.conf (default user + systemd)
+  Log "Ubuntu dev user + authorized_keys + wsl.conf (systemd) configured"
+}
+
+# ---- 3. finalize ------------------------------------------------------------
+function Complete-Provisioning {
+  # Turn off the unattended auto-login now that provisioning is done.
+  $winlogon = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+  Set-ItemProperty -Path $winlogon -Name AutoAdminLogon -Value '0' -ErrorAction SilentlyContinue
+  $stamp = (Get-Date).ToUniversalTime().ToString('o')
+  Set-Content -Path 'C:\provisioning-complete.txt' -Value $stamp -Encoding ascii
+  Log "provisioning complete @ $stamp"
+}
+
+try {
+  Log "==== First-Boot.ps1 starting ===="
+  Install-OpenSSHServer
+  Set-AdminAuthorizedKey
+  Install-WslKernel
+  Import-UbuntuDistro
+  Set-UbuntuDevUser
+  Complete-Provisioning
+  Log "==== First-Boot.ps1 finished OK ===="
+} catch {
+  Log "FATAL: $($_.Exception.Message)"
+  Set-Content -Path 'C:\provisioning-failed.txt' -Value $_.Exception.Message -Encoding ascii
+  throw
+}
