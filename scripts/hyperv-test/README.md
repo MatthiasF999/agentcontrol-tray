@@ -196,11 +196,25 @@ inputs into the guest, run the reused 66d step functions in-guest via
 `Invoke-Command`, `Copy-Item -FromSession` `result.json` + screenshots back, then
 `Stop-VM`. Grades `result.json` for the pass/fail exit code.
 
-The wsl-flow is idempotent and self-updating: it runs `wsl --update` before any
-install (so an older inbox `wsl.exe` learns `--no-distribution` + `WSL_UTF8`),
-skips the kernel/distro installs when the base snapshot already provides them,
-and decodes UTF-16LE output from a pre-update `wsl.exe` so step details stay
-readable.
+The wsl-flow is idempotent and self-updating: it runs `wsl --update` first (so an
+older inbox `wsl.exe` honours `WSL_UTF8`; soft-fails when the PS-Direct `User`
+token can't elevate the platform MSI), then **imports** `Ubuntu-22.04` rather than
+installing it, and decodes UTF-16LE output from a pre-update `wsl.exe` so step
+details stay readable.
+
+Why import, not `wsl --install -d`? WSL registration is **per-user**, kept under
+`HKCU\…\CurrentVersion\Lxss`. `Import-DevVM.ps1` registers the distro in the base
+image, but it does so as the `User` account over PowerShell Direct — a *network*
+logon, whose `HKCU` is a transient hive, not the interactive `User`'s
+`NTUSER.DAT`. So the base-image registration never reaches the session AutoLogon
+starts: in-guest `wsl --list` reports "no installed distributions". `Step-ImportDistro`
+fixes this by re-importing a staged rootfs inside the interactive session
+(`wsl --import Ubuntu-22.04 C:\WSL\Ubuntu-22.04 <rootfs> --version 2`). The
+orchestrator copies `ubuntu-jammy-wsl.rootfs.tar.gz` into the guest for the
+wsl/full flows; its host path is `-UbuntuRootfsPath` (default
+`C:\Hyper-V\AgentControlTest\ubuntu-jammy-wsl.rootfs.tar.gz`, the same tarball
+`Import-DevVM.ps1` downloads). `wsl --import` works on the old inbox `wsl.exe`
+(unlike `wsl --install --no-distribution`) and is idempotent per run.
 
 **PowerShell Direct execs over the VMBus, not the network**, so nothing needs
 network setup anywhere: no OpenSSH server in the guest, no port-22 firewall rule,

@@ -12,7 +12,8 @@
   builder (Import-DevVM.ps1), so this drops 66d's nested-virt detection apparatus.
 
   -Flow tray  installer run + install-dir verify + tray launch
-  -Flow wsl   WSL2 kernel + Ubuntu-22.04 + wsl.sh bridge + verify-pair-flow
+  -Flow wsl   wsl --update + import Ubuntu-22.04 (staged rootfs) + wsl.sh bridge
+              + verify-pair-flow
   -Flow full  tray then wsl
 
 .NOTES
@@ -38,7 +39,6 @@ $env:WSL_UTF8 = '1'
 $Distro                = 'Ubuntu-22.04'
 $WslShUrl              = 'https://install.agent-control.io/wsl.sh'
 $BridgeUnit            = 'agentcontrol-bridge'
-$KernelReadyTimeoutSec = 300
 $DistroReadyTimeoutSec = 300
 $SetupExe              = Join-Path $StagingRoot 'setup.exe'
 $TrayExeName           = 'agentcontrol-tray.exe'
@@ -216,9 +216,9 @@ function Step-UpdateWsl {
   # Requires an elevated token; this runner drives PowerShell Direct into the
   # VM's `User` account, whose UAC-filtered token can't launch the WSL platform
   # MSI, so --update fails "requires elevation". We skip in that case -- the
-  # idempotent install-kernel/install-distro steps short-circuit on the
-  # pre-provisioned base image anyway, and a real user's installer elevates via
-  # UAC before touching wsl.
+  # inbox wsl.exe already supports `wsl --import`, which Step-ImportDistro uses to
+  # re-register the distro without elevation, and a real user's installer elevates
+  # via UAC before touching wsl.
   $r = Invoke-Wsl @('--update')
   $shot = Save-Screenshot 'wsl-update'
   if ($r.Code -eq 0 -or $r.Text -match 'already the latest version|already installed') {
@@ -232,46 +232,34 @@ function Step-UpdateWsl {
   throw "wsl --update failed ($($r.Code)): $($r.Text.Trim())"
 }
 
-function Step-InstallKernel {
-  # If any distro is registered, the WSL kernel is definitely present + functional.
-  # More robust than parsing `wsl --status` prose which changes across wsl.exe vintages.
-  $l = Invoke-Wsl @('--list', '--quiet')
-  if ($l.Code -eq 0) {
-    $distros = ($l.Text -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    if ($distros.Count -gt 0) {
-      Add-Step 'install-kernel' 'pass' "kernel present (distros registered: $($distros -join ', '))" (Save-Screenshot 'kernel-preinstalled')
-      return
-    }
-  }
-  $r = Invoke-Wsl @('--install', '--no-distribution', '--no-launch')
-  $shot = Save-Screenshot 'kernel-install'
-  if ($r.Code -ne 0) { throw "wsl --install --no-distribution failed ($($r.Code)): $($r.Text.Trim())" }
-  Add-Step 'install-kernel' 'pass' 'wsl --install --no-distribution --no-launch' $shot
-}
-
-function Step-WaitKernel {
-  # A registered distro implies a ready kernel; more robust than --status prose.
-  $ok = Wait-For $KernelReadyTimeoutSec {
-    $l = Invoke-Wsl @('--list', '--quiet')
-    if ($l.Code -ne 0) { return $false }
-    ($l.Text -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }).Count -gt 0
-  }
-  $shot = Save-Screenshot 'kernel-ready'
-  if (-not $ok) { throw "WSL kernel not ready within ${KernelReadyTimeoutSec}s" }
-  Add-Step 'wait-kernel' 'pass' 'wsl --list shows at least one registered distro' $shot
-}
-
-function Step-InstallDistro {
-  # Skip when the distro is already registered (our base snapshot ships it).
+function Step-ImportDistro {
+  # WSL registration is per-user: it lives under HKCU\...\CurrentVersion\Lxss.
+  # Import-DevVM.ps1 ran `wsl --import` as the `User` account over PS Direct,
+  # which is a NETWORK logon -> its HKCU is a transient hive, NOT the interactive
+  # User's NTUSER.DAT. So the base-image registration never reaches the session
+  # AutoLogon starts, and `wsl --list` here shows "no installed distributions".
+  # Fix: re-import the staged rootfs now, inside the interactive session, so the
+  # registration lands in the right HKCU. `wsl --import` works on the old inbox
+  # wsl.exe (unlike `wsl --install --no-distribution`) and is idempotent per run.
   $l = Invoke-Wsl @('--list', '--quiet')
   if ($l.Code -eq 0 -and (($l.Text -split "\r?\n" | ForEach-Object { $_.Trim() }) -contains $Distro)) {
-    Add-Step 'install-distro' 'pass' "$Distro already present (base snapshot)" (Save-Screenshot 'distro-preinstalled')
+    Add-Step 'import-distro' 'pass' "$Distro already registered in this session" (Save-Screenshot 'distro-preregistered')
     return
   }
-  $r = Invoke-Wsl @('--install', '-d', $Distro, '--no-launch')
-  $shot = Save-Screenshot 'distro-install'
-  if ($r.Code -ne 0) { throw "wsl --install -d $Distro failed ($($r.Code)): $($r.Text.Trim())" }
-  Add-Step 'install-distro' 'pass' "wsl --install -d $Distro --no-launch" $shot
+  $rootfs = Join-Path $StagingRoot 'ubuntu-jammy-wsl.rootfs.tar.gz'
+  if (-not (Test-Path $rootfs)) {
+    throw "rootfs not staged at $rootfs -- pass -UbuntuRootfsPath to the orchestrator OR pre-place it at C:\Hyper-V\AgentControlTest\ubuntu-jammy-wsl.rootfs.tar.gz"
+  }
+  $target = Join-Path 'C:\WSL' $Distro
+  New-Item -ItemType Directory -Force -Path $target | Out-Null
+  $r = Invoke-Wsl @('--import', $Distro, $target, $rootfs, '--version', '2')
+  $shot = Save-Screenshot 'distro-import'
+  if ($r.Code -ne 0) { throw "wsl --import $Distro failed ($($r.Code)): $($r.Text.Trim())" }
+  $v = Invoke-Wsl @('--list', '--quiet')
+  if (-not ($v.Code -eq 0 -and (($v.Text -split "\r?\n" | ForEach-Object { $_.Trim() }) -contains $Distro))) {
+    throw "wsl --import reported success but $Distro absent from wsl --list --quiet: $($v.Text.Trim())"
+  }
+  Add-Step 'import-distro' 'pass' "wsl --import $Distro -> $target (from staged rootfs)" $shot
 }
 
 function Step-WaitDistro {
@@ -344,8 +332,7 @@ function Invoke-TrayFlow {
 }
 
 function Invoke-WslFlow {
-  Step-VerifyHost; Step-UpdateWsl; Step-InstallKernel; Step-WaitKernel
-  Step-InstallDistro; Step-WaitDistro
+  Step-VerifyHost; Step-UpdateWsl; Step-ImportDistro; Step-WaitDistro
   Step-InstallBridge; Step-VerifyBridge; Step-VerifyPairFlow
 }
 

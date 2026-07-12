@@ -35,6 +35,7 @@ param(
   [string]$VmName = 'agentcontrol-test-vm',
   [string]$SnapshotName = 'clean-agentcontrol-base',
   [string]$OutputRoot = '',
+  [string]$UbuntuRootfsPath = 'C:\Hyper-V\AgentControlTest\ubuntu-jammy-wsl.rootfs.tar.gz',
   [switch]$KeepVmRunning
 )
 
@@ -138,6 +139,21 @@ function Copy-Inputs {
   } -ArgumentList $StageWin, $OutputWin
   foreach ($f in Get-ChildItem -File $StageLocal) {
     Copy-Item -ToSession $Session -Path $f.FullName -Destination (Join-Path $StageWin $f.Name) -Force
+  }
+
+  # Ubuntu rootfs for the wsl flow. Copied straight to the session (not via
+  # .stage) since it is large. runner-vm.ps1's Step-ImportDistro re-imports it
+  # under the interactive User's HKCU: Import-DevVM.ps1 registered the distro
+  # under a network-logon HKCU (a transient hive), so the registration never
+  # reaches the interactive session AutoLogon starts. Absent -> warn and let the
+  # runner decide (it passes only if the distro is already registered in-session).
+  if ($Flow -in 'wsl', 'full') {
+    if (Test-Path -LiteralPath $UbuntuRootfsPath) {
+      Log "staging Ubuntu rootfs -> guest (Copy-Item -ToSession): $UbuntuRootfsPath"
+      Copy-Item -ToSession $Session -Path $UbuntuRootfsPath -Destination (Join-Path $StageWin 'ubuntu-jammy-wsl.rootfs.tar.gz') -Force
+    } else {
+      Log "WARNING: Ubuntu rootfs not found at $UbuntuRootfsPath - Step-ImportDistro will fail unless the distro is already registered in the guest's interactive session"
+    }
   }
 }
 
