@@ -92,10 +92,19 @@ function Repair-WslText {
 
 function Invoke-Wsl {
   <# Run wsl.exe with $WslArgs; capture merged stdout/stderr + exit code.
-     Repairs UTF-16LE output from older wsl.exe that ignores the WSL_UTF8 hint. #>
+     Repairs UTF-16LE output from older wsl.exe that ignores the WSL_UTF8 hint.
+     Locally disables ErrorActionPreference='Stop' so wsl.exe stderr writes
+     don't terminate before the text is captured/repaired. #>
   param([Parameter(Mandatory)][string[]]$WslArgs)
-  $text = (& wsl.exe @WslArgs 2>&1 | Out-String)
-  return [pscustomobject]@{ Code = $LASTEXITCODE; Text = (Repair-WslText $text) }
+  $prevEAP = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $text = (& wsl.exe @WslArgs 2>&1 | Out-String)
+    $code = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $prevEAP
+  }
+  return [pscustomobject]@{ Code = $code; Text = (Repair-WslText $text) }
 }
 
 function Wait-For {
@@ -224,11 +233,15 @@ function Step-UpdateWsl {
 }
 
 function Step-InstallKernel {
-  # Skip when a working kernel is already present (our base snapshot ships one).
-  $s = Invoke-Wsl @('--status')
-  if ($s.Code -eq 0 -and $s.Text -match 'Default Version' -and $s.Text -notmatch 'kernel file is not found|--update') {
-    Add-Step 'install-kernel' 'pass' 'kernel already present (base snapshot)' (Save-Screenshot 'kernel-preinstalled')
-    return
+  # If any distro is registered, the WSL kernel is definitely present + functional.
+  # More robust than parsing `wsl --status` prose which changes across wsl.exe vintages.
+  $l = Invoke-Wsl @('--list', '--quiet')
+  if ($l.Code -eq 0) {
+    $distros = ($l.Text -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($distros.Count -gt 0) {
+      Add-Step 'install-kernel' 'pass' "kernel present (distros registered: $($distros -join ', '))" (Save-Screenshot 'kernel-preinstalled')
+      return
+    }
   }
   $r = Invoke-Wsl @('--install', '--no-distribution', '--no-launch')
   $shot = Save-Screenshot 'kernel-install'
@@ -237,13 +250,15 @@ function Step-InstallKernel {
 }
 
 function Step-WaitKernel {
+  # A registered distro implies a ready kernel; more robust than --status prose.
   $ok = Wait-For $KernelReadyTimeoutSec {
-    $s = Invoke-Wsl @('--status')
-    $s.Code -eq 0 -and $s.Text -match 'Default Version' -and $s.Text -notmatch 'kernel file is not found|--update'
+    $l = Invoke-Wsl @('--list', '--quiet')
+    if ($l.Code -ne 0) { return $false }
+    ($l.Text -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }).Count -gt 0
   }
   $shot = Save-Screenshot 'kernel-ready'
   if (-not $ok) { throw "WSL kernel not ready within ${KernelReadyTimeoutSec}s" }
-  Add-Step 'wait-kernel' 'pass' 'wsl --status reports kernel installed' $shot
+  Add-Step 'wait-kernel' 'pass' 'wsl --list shows at least one registered distro' $shot
 }
 
 function Step-InstallDistro {
@@ -340,8 +355,9 @@ try {
   if ($Flow -eq 'wsl'  -or $Flow -eq 'full') { Invoke-WslFlow }
   $result.pass = $true
 } catch {
-  $result.errors += $_.Exception.Message
-  try { Add-Step 'error' 'fail' $_.Exception.Message (Save-Screenshot 'error') } catch {}
+  $msg = Repair-WslText $_.Exception.Message
+  $result.errors += $msg
+  try { Add-Step 'error' 'fail' $msg (Save-Screenshot 'error') } catch {}
   try { if (-not $result.diagnostics) { Write-Diagnostics } } catch {}
 }
 
