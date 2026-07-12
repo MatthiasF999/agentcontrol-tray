@@ -128,13 +128,15 @@ WSL-side driver. Total budget **~12 min** (revert 5 s + boot ~60 s + install
 
 | # | Orchestrator step | Command (via `powershell.exe -c` or ssh) |
 |---|---|---|
-| 1 | Revert to golden | `Restore-VMSnapshot -VMName AgentControl-Test -Name clean-agentcontrol-base` |
-| 2 | Boot | `Start-VM -Name AgentControl-Test` |
+| 1 | Revert to golden | `Restore-VMSnapshot -VMName agentcontrol-test-vm -Name clean-agentcontrol-base` |
+| 2 | Boot | `Start-VM -Name agentcontrol-test-vm` |
 | 3 | Wait for SSH | poll `Test-NetConnection 172.31.0.10 -Port 22` (or bash `nc -z`) until open, ~90 s cap |
-| 4 | Stage inputs | `scp setup.exe verify-pair-flow.mjs pair-verify.env runner-vm.ps1 helpers.psm1 → test@172.31.0.10:C:\AgentControlTest\staging` |
-| 5 | Run | `ssh test@172.31.0.10 "powershell -File C:\AgentControlTest\staging\runner-vm.ps1"` |
-| 6 | Collect | `scp test@172.31.0.10:...\output\{result.json,pair-flow.json,screenshots} → ./output` |
-| 7 | Teardown | `Stop-VM -Name AgentControl-Test -TurnOff` (state discarded — step 1 reverts next run) |
+| 4 | Stage inputs | `scp setup.exe verify-pair-flow.mjs pair-verify.env runner-vm.ps1 helpers.psm1 → User@172.31.0.10:C:\AgentControlTest\staging` |
+| 5 | Run | `ssh User@172.31.0.10 "powershell -File C:\AgentControlTest\staging\runner-vm.ps1"` |
+| 6 | Collect | `scp User@172.31.0.10:...\output\{result.json,pair-flow.json,screenshots} → ./output` |
+| 7 | Teardown | `Stop-VM -Name agentcontrol-test-vm -TurnOff` (state discarded — step 1 reverts next run) |
+
+> VM name `agentcontrol-test-vm` and SSH user `User` are the Phase 66j WinDev-image built-ins (blank-password admin baked into `administrators_authorized_keys`); see the 66j reconciliation note in §6.
 
 `runner-vm.ps1` = the **guest-side driver**, invoked over SSH instead of as a
 Sandbox LogonCommand. It calls the reused step functions (§4). Because it runs in
