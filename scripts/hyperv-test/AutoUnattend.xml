@@ -69,7 +69,17 @@
                language="neutral" versionScope="nonSxS"
                xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
 
-      <!-- Suppress every OOBE screen so first boot lands on the desktop. -->
+      <!-- Suppress every OOBE screen so first boot lands on the desktop.
+
+           Do NOT add SkipMachineOOBE / SkipUserOOBE here. Microsoft deprecated
+           both ("Don't use the SkipMachineOOBE setting to automate OOBE" -
+           learn.microsoft.com/.../automate-oobe). On Windows 11 26200 they
+           short-circuit the very OOBE machine that writes the AutoAdminLogon /
+           DefaultPassword registry values AND registers FirstLogonCommands, so
+           setting them silently kills BOTH AutoLogon and First-Boot.ps1 (the VM
+           lands at the login screen and provisioning never starts). The Hide*
+           settings below + ProtectYourPC are the documented replacement and
+           suppress every screen on their own. -->
       <OOBE>
         <HideEULAPage>true</HideEULAPage>
         <HideLocalAccountScreen>true</HideLocalAccountScreen>
@@ -77,34 +87,36 @@
         <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
         <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
         <ProtectYourPC>3</ProtectYourPC>
-        <SkipMachineOOBE>true</SkipMachineOOBE>
-        <SkipUserOOBE>true</SkipUserOOBE>
       </OOBE>
 
+      <!-- Configure the BUILT-IN Administrator, not a new LocalAccount.
+           "Administrator" already exists (built-in, disabled by default), so a
+           <LocalAccount><Name>Administrator</Name> is a name collision: Setup
+           does not cleanly create it and the AutoLogon password can end up out
+           of sync with the account. The documented pattern is
+           <AdministratorPassword> to set the built-in account's password, plus
+           an <AutoLogon Username="Administrator"> which itself enables the
+           built-in account. -->
       <UserAccounts>
-        <LocalAccounts>
-          <LocalAccount wcm:action="add">
-            <Name>Administrator</Name>
-            <Group>Administrators</Group>
-            <DisplayName>Administrator</DisplayName>
-            <Password>
-              <Value>AgentControl!Test1</Value>
-              <PlainText>true</PlainText>
-            </Password>
-          </LocalAccount>
-        </LocalAccounts>
+        <AdministratorPassword>
+          <Value>AgentControl!Test1</Value>
+          <PlainText>true</PlainText>
+        </AdministratorPassword>
       </UserAccounts>
 
-      <!-- Auto-login so First-Boot.ps1 runs unattended. LogonCount is high;
-           First-Boot.ps1 disables AutoAdminLogon once provisioning completes. -->
+      <!-- Auto-login so First-Boot.ps1 runs unattended. Username=Administrator
+           enables the built-in account. LogonCount is high; First-Boot.ps1
+           disables AutoAdminLogon once provisioning completes. Element order
+           (Password, Enabled, LogonCount, Username) matches the MS schema
+           example - the pass is xsd:sequence-ordered, don't reshuffle. -->
       <AutoLogon>
-        <Enabled>true</Enabled>
-        <Username>Administrator</Username>
-        <LogonCount>5</LogonCount>
         <Password>
           <Value>AgentControl!Test1</Value>
           <PlainText>true</PlainText>
         </Password>
+        <Enabled>true</Enabled>
+        <LogonCount>5</LogonCount>
+        <Username>Administrator</Username>
       </AutoLogon>
 
       <!-- Provisioning driver. -ExecutionPolicy Bypass because the file is

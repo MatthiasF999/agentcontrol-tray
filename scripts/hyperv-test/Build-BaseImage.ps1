@@ -98,7 +98,28 @@ function Test-Unattend {
   if ($bad.Count -gt 0) {
     throw 'AutoUnattend.xml: RunSynchronous is under Shell-Setup; it belongs to the Microsoft-Windows-Deployment component'
   }
-  Info 'AutoUnattend.xml validated (well-formed; RunSynchronous placement OK)'
+
+  # Without AutoLogon the VM lands at the login screen; without FirstLogonCommands
+  # First-Boot.ps1 never runs. Either one means a dead build that needs manual
+  # intervention -- fail fast now, before the ~15min VHDX conversion.
+  $oobe = "//u:settings[@pass='oobeSystem']/u:component[@name='Microsoft-Windows-Shell-Setup']"
+  if ($doc.SelectNodes("$oobe/u:AutoLogon/u:Enabled[.='true']", $ns).Count -eq 0) {
+    throw 'AutoUnattend.xml: oobeSystem is missing an enabled <AutoLogon> block; the VM would stop at the login screen'
+  }
+  $flc = $doc.SelectNodes("$oobe/u:FirstLogonCommands/u:SynchronousCommand/u:CommandLine", $ns)
+  $hasFirstBoot = $false
+  foreach ($c in $flc) { if ($c.InnerText -match 'First-Boot\.ps1') { $hasFirstBoot = $true } }
+  if (-not $hasFirstBoot) {
+    throw 'AutoUnattend.xml: oobeSystem FirstLogonCommands does not invoke First-Boot.ps1; provisioning would never start'
+  }
+
+  # SkipMachineOOBE / SkipUserOOBE are deprecated and, on Windows 11 26200,
+  # silently kill both AutoLogon and FirstLogonCommands. Warn loudly if they creep back.
+  if ($doc.SelectNodes("//u:SkipMachineOOBE | //u:SkipUserOOBE", $ns).Count -gt 0) {
+    Warn 'AutoUnattend.xml: SkipMachineOOBE/SkipUserOOBE present -- these are deprecated and break AutoLogon + FirstLogonCommands on Win11 26200. Use the Hide* OOBE settings instead.'
+  }
+
+  Info 'AutoUnattend.xml validated (well-formed; RunSynchronous placement OK; AutoLogon + First-Boot.ps1 FirstLogonCommands present)'
 }
 
 # ---- 1. prereqs -------------------------------------------------------------
