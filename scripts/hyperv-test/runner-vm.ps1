@@ -251,6 +251,15 @@ function Step-ImportDistro {
     throw "rootfs not staged at $rootfs -- pass -UbuntuRootfsPath to the orchestrator OR pre-place it at C:\Hyper-V\AgentControlTest\ubuntu-jammy-wsl.rootfs.tar.gz"
   }
   $target = Join-Path 'C:\WSL' $Distro
+  # The base snapshot may already have C:\WSL\<Distro>\ext4.vhdx on disk from
+  # Import-DevVM.ps1's build-time `wsl --import`, but that registration never
+  # reached the interactive User's HKCU (network-logon transient-hive quirk above).
+  # We only get here after the skip-if-registered probe confirmed $Distro is NOT
+  # registered, so the dir is an orphan -- `wsl --import` would fail with "The
+  # supplied install location is already in use". Wipe it before re-importing.
+  if (Test-Path -LiteralPath $target) {
+    Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
+  }
   New-Item -ItemType Directory -Force -Path $target | Out-Null
   $r = Invoke-Wsl @('--import', $Distro, $target, $rootfs, '--version', '2')
   $shot = Save-Screenshot 'distro-import'
