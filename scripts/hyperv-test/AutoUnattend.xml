@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!--
   AutoUnattend.xml for the Phase 66h Hyper-V test VM.
 
@@ -15,7 +15,7 @@
   Local admin account "Administrator" gets a KNOWN password (below). It is a
   throwaway eval VM reachable only over an Internal host-only vSwitch; SSH key
   auth (baked in by First-Boot.ps1) is the real access path. Rotate/replace as
-  you like — see README.md.
+  you like; see README.md.
 
     Administrator password:  AgentControl!Test1
 -->
@@ -30,6 +30,17 @@
                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <ComputerName>AGENTCTRL-TEST</ComputerName>
       <TimeZone>UTC</TimeZone>
+    </component>
+
+    <!-- RunSynchronous belongs to Microsoft-Windows-Deployment, NOT Shell-Setup.
+         Placing it under Shell-Setup makes Setup reject the whole specialize pass:
+         "A component or setting specified in the answer file does not exist." -->
+    <component name="Microsoft-Windows-Deployment"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <!-- Skip the "let's connect you to a network" gate on 22H2+ OOBE. -->
       <RunSynchronous>
         <RunSynchronousCommand wcm:action="add">

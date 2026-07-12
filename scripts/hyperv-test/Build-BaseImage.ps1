@@ -1,19 +1,20 @@
-<#
+﻿<#
 .SYNOPSIS
   ONE-TIME builder for the Phase 66h Hyper-V test VM. Turns a Windows 11
   Enterprise 90-day evaluation ISO into a ready-to-clone Hyper-V guest with
   WSL2 + Ubuntu-22.04 + OpenSSH pre-installed, then snapshots it as
-  `clean-agentcontrol-base` — the immutable golden state the per-run
+  `clean-agentcontrol-base` -- the immutable golden state the per-run
   orchestrator (Phase 66h.2) reverts to before every test.
 
   Run elevated (admin) on a Windows 11 Pro/Enterprise host with Hyper-V enabled.
   Idempotent: re-running reuses an existing VHDX/VM/snapshot rather than
-  rebuilding. Does NOT touch the host's own WSL — that is the entire point of the
+  rebuilding. Does NOT touch the host's own WSL -- that is the entire point of the
   VM approach (see BLUEPRINT.md §"Why Windows Sandbox can't do this").
 
 .EXAMPLE
   pwsh -File Build-BaseImage.ps1
   pwsh -File Build-BaseImage.ps1 -IsoPath D:\iso\Win11-Eval.iso -Force
+  pwsh -File Build-BaseImage.ps1 -Resume   # after a mid-provisioning crash
 
 .NOTES
   # @line-limit-exception: single linear one-time build pipeline; the step
@@ -34,14 +35,20 @@ param(
   # reads the host Ubuntu WSL key over the \\wsl$ share.
   [string]$HostPubKeyPath = '\\wsl$\Ubuntu\home\dev\.ssh\id_ed25519.pub',
   [string]$WslKernelUrl   = 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi',
-  [string]$UbuntuRootfsUrl = 'https://cloud-images.ubuntu.com/wsl/jammy/current/ubuntu-jammy-wsl-amd64-wsl.rootfs.tar.gz',
+  # Canonical periodically moves WSL rootfs paths -- verify by curl -sIL before merging
+  [string]$UbuntuRootfsUrl = 'https://cloud-images.ubuntu.com/wsl/releases/jammy/current/ubuntu-jammy-wsl-amd64-wsl.rootfs.tar.gz',
   # Canonical Microsoft ISO->VHDX converter; downloaded once into $WorkDir.
   [string]$ConvertImageUrl = 'https://raw.githubusercontent.com/MicrosoftDocs/Virtualization-Documentation/main/hyperv-tools/Convert-WindowsImage/Convert-WindowsImage.ps1',
   [int]$MemoryGB          = 8,
   [int]$CpuCount          = 4,
   [int]$DiskGB            = 64,
   [int]$ProvisioningTimeoutMin = 40,
-  [switch]$Force
+  [switch]$Force,
+  # Resume a crashed run: the VM already exists and is (or was) provisioning.
+  # Skips ISO/VHDX build, payload injection and VM creation; jumps straight to
+  # the provisioning wait + snapshot. Use after the script died mid-Wait (e.g.
+  # the pre-sshd SSH-probe stderr crash) with a VM left running.
+  [switch]$Resume
 )
 
 $ErrorActionPreference = 'Stop'
@@ -63,12 +70,35 @@ function Start-Heartbeat {
   }
   Start-ThreadJob -StreamingHost $Host -ArgumentList $Label -ScriptBlock {
     param($l); $sw = [Diagnostics.Stopwatch]::StartNew()
-    while ($true) { Start-Sleep -Seconds 30; Write-Host "[build] $l — elapsed $($sw.Elapsed.ToString('mm\:ss'))" -ForegroundColor DarkCyan }
+    while ($true) { Start-Sleep -Seconds 30; Write-Host "[build] $l -- elapsed $($sw.Elapsed.ToString('mm\:ss'))" -ForegroundColor DarkCyan }
   }
 }
 function Stop-Heartbeat {
   param($Job)
   if ($Job) { $Job | Stop-Job -EA SilentlyContinue; $Job | Remove-Job -Force -EA SilentlyContinue }
+}
+
+# Validate the answer file BEFORE the 30-60 min ISO->VHDX conversion so a
+# malformed or mis-placed setting fails in seconds -- not after a booted guest
+# rejects unattend.xml deep in the specialize pass.
+function Test-Unattend {
+  param([string]$Path)
+  if (-not (Test-Path $Path)) { throw "AutoUnattend.xml not found at $Path" }
+  $doc = New-Object System.Xml.XmlDocument
+  try { $doc.Load($Path) }   # .Load reads the file directly: BOM- and encoding-safe
+  catch { throw "AutoUnattend.xml is not well-formed XML: $($_.Exception.Message)" }
+
+  $ns = New-Object System.Xml.XmlNamespaceManager $doc.NameTable
+  $ns.AddNamespace('u', 'urn:schemas-microsoft-com:unattend')
+  # RunSynchronous is a child of Microsoft-Windows-Deployment, never Shell-Setup;
+  # mis-placing it makes Setup reject the whole specialize pass with
+  # "A component or setting specified in the answer file does not exist."
+  $bad = $doc.SelectNodes(
+    "//u:component[@name='Microsoft-Windows-Shell-Setup']/u:RunSynchronous", $ns)
+  if ($bad.Count -gt 0) {
+    throw 'AutoUnattend.xml: RunSynchronous is under Shell-Setup; it belongs to the Microsoft-Windows-Deployment component'
+  }
+  Info 'AutoUnattend.xml validated (well-formed; RunSynchronous placement OK)'
 }
 
 # ---- 1. prereqs -------------------------------------------------------------
@@ -97,7 +127,7 @@ function Test-Prereqs {
   if (-not (Get-VMSwitch -Name $SwitchName -ErrorAction SilentlyContinue)) {
     throw "vSwitch '$SwitchName' not found. Create one or pass -SwitchName."
   }
-  Info "prereqs OK — ${freeGB}GB free on $drive, ISO present, switch '$SwitchName'"
+  Info "prereqs OK -- ${freeGB}GB free on $drive, ISO present, switch '$SwitchName'"
 }
 
 # ---- 2. stage injection payload --------------------------------------------
@@ -130,12 +160,13 @@ function New-BaseVhdx {
   Get-File $ConvertImageUrl $converter 'Convert-WindowsImage.ps1'
   . $converter   # dot-source to expose the Convert-WindowsImage function
   $unattend = Join-Path $scriptDir 'AutoUnattend.xml'
-  Info "converting ISO -> VHDX (edition '$Edition', ${DiskGB}GB dynamic UEFI) — 30-60 min; -Verbose + a 30s heartbeat prove it is alive ..."
+  Test-Unattend $unattend   # fail fast on a bad answer file, before the long conversion
+  Info "converting ISO -> VHDX (edition '$Edition', ${DiskGB}GB dynamic UEFI) -- 30-60 min; -Verbose + a 30s heartbeat prove it is alive ..."
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $hb = Start-Heartbeat 'converting ISO -> VHDX'
   try {
     Convert-WindowsImage -SourcePath $IsoPath -Edition $Edition `
-      -VHDPath $vhdxPath -VHDFormat VHDX -VHDType Dynamic -DiskLayout UEFI `
+      -VHDPath $vhdxPath -VHDFormat VHDX -DiskLayout UEFI `
       -SizeBytes ($DiskGB * 1GB) -UnattendPath $unattend -Verbose
   } finally { Stop-Heartbeat $hb }
   if (-not (Test-Path $vhdxPath)) { throw 'Convert-WindowsImage did not produce a VHDX' }
@@ -188,9 +219,9 @@ function Wait-Provisioning {
   # remounting the VHDX between checks would fight the running VM, so instead we
   # SSH-probe: the guest's OpenSSH comes up mid-provisioning, and the completion
   # file is readable over SSH once written. Fall back to a fixed wait if SSH
-  # never answers (headless host with no key path) — see README troubleshooting.
+  # never answers (headless host with no key path) -- see README troubleshooting.
   Info "starting VM; waiting up to ${ProvisioningTimeoutMin}min for provisioning ..."
-  Start-VM -Name $VmName
+  if ((Get-VM -Name $VmName).State -ne 'Running') { Start-VM -Name $VmName }
   $deadline = (Get-Date).AddMinutes($ProvisioningTimeoutMin)
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $ip = $null
@@ -203,11 +234,21 @@ function Wait-Provisioning {
       if ($ip) { Info "guest IP: $ip" }
     }
     if ($ip) {
-      $probe = ssh -o BatchMode=yes -o StrictHostKeyChecking=no `
-        -o ConnectTimeout=5 "Administrator@$ip" `
-        'if (Test-Path C:\provisioning-complete.txt) { "DONE" } elseif (Test-Path C:\provisioning-failed.txt) { "FAILED" } else { "WAIT" }' 2>$null
+      # The guest's OpenSSH is absent for the first ~15-25min of boot, so early
+      # probes time out. Under $ErrorActionPreference=Stop, PS 5.1 turns a native
+      # command's stderr into a terminating NativeCommandError, and 2>$null does
+      # not fully suppress it -- so wrap in try/catch and treat any failure (or
+      # non-zero exit) as a plain 'WAIT'. This keeps the loop (and its per-tick
+      # Info heartbeat below) alive until sshd answers.
+      $probe = 'WAIT'
+      try {
+        $probe = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no `
+          -o ConnectTimeout=5 "Administrator@$ip" `
+          'if (Test-Path C:\provisioning-complete.txt) { "DONE" } elseif (Test-Path C:\provisioning-failed.txt) { "FAILED" } else { "WAIT" }' 2>$null
+        if ($LASTEXITCODE -ne 0) { $probe = 'WAIT' }
+      } catch { $probe = 'WAIT' }
       if ($probe -match 'DONE')   { Info "provisioning complete (elapsed $elapsed)"; return $ip }
-      if ($probe -match 'FAILED') { throw 'guest provisioning failed — see C:\provisioning\first-boot.log inside the VM' }
+      if ($probe -match 'FAILED') { throw 'guest provisioning failed -- see C:\provisioning\first-boot.log inside the VM' }
     }
     Info "provisioning... elapsed $elapsed ($(if ($ip) { "guest $ip, installing/oobe" } else { 'waiting for guest IP' }))"
   } while ((Get-Date) -lt $deadline)
@@ -247,9 +288,20 @@ function Complete-Base {
 
 # ---- run --------------------------------------------------------------------
 Test-Prereqs
-New-InjectionPayload
-New-BaseVhdx
-Copy-PayloadIntoVhdx
-New-TestVm
+if ($Resume) {
+  if (-not (Get-VM -Name $VmName -ErrorAction SilentlyContinue)) {
+    throw "-Resume: VM '$VmName' not found -- nothing to resume. Run without -Resume to build from scratch."
+  }
+  if (Get-VMSnapshot -VMName $VmName -Name $SnapshotName -ErrorAction SilentlyContinue) {
+    Warn "-Resume: snapshot '$SnapshotName' already exists -- base image looks complete; leaving it. Pass -Force (no -Resume) to rebuild."
+    return
+  }
+  Info "resume: VM '$VmName' exists, no snapshot yet -- skipping build/inject/create, continuing to provisioning wait"
+} else {
+  New-InjectionPayload
+  New-BaseVhdx
+  Copy-PayloadIntoVhdx
+  New-TestVm
+}
 $guestIp = Wait-Provisioning
 Complete-Base -GuestIp $guestIp
