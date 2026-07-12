@@ -51,8 +51,11 @@ stage_common() {
   log "preparing host folders under $HOST_WSL_ROOT"
   mkdir -p "$STAGING" "$OUTPUT/screenshots"
   cp "$SCRIPT_DIR/helpers.psm1" "$STAGING/helpers.psm1"
-  # Pair-flow verifier runs inside WSL after the bridge installs (wsl flow).
+  # Pair-flow verifiers run inside WSL after the bridge installs (wsl flow):
+  # verify-pair-flow.mjs at the HTTP-redirect layer, verify-pair-flow-spa.mjs
+  # driving the real SPA in headless Chromium (Playwright, guest-side prereq).
   cp "$SCRIPT_DIR/../e2e-pair-verify/verify-pair-flow.mjs" "$STAGING/verify-pair-flow.mjs"
+  cp "$SCRIPT_DIR/../e2e-pair-verify/verify-pair-flow-spa.mjs" "$STAGING/verify-pair-flow-spa.mjs"
 }
 
 # The pair-flow verifier needs a service_role key. It lives in a gitignored
