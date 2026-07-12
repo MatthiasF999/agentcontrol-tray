@@ -89,12 +89,13 @@ The `service_role` JWT bypasses RLS — treat it like a root password.
 
 ### Test user
 
-Provisioned out-of-band as the dedicated e2e user
-(`e2e-installer-test@agentcontrol.dev`) — see the backend's
-`docs/E2E-TEST-USER.md` / migration `0150` / `provision-e2e-user.mjs` produced by
-the parallel test-user teammate. `seed-test-user.sql` here is **reference SQL
-only, NOT a migration, DO NOT AUTO-APPLY** (guarded `-v e2e_seed=1`, no-op
-otherwise); prefer the canonical provisioning script.
+The dedicated e2e user (`e2e-installer-test@agentcontrol.dev`) is **provisioned
+by the backend's canonical migration
+`agentcontrol-supabase/migrations/0150_e2e_installer_test_user.sql`** (merged +
+applied to prod; idempotent + non-destructive). **Do not hand-provision this
+user** — no seed SQL lives here anymore. For details see the backend's
+`docs/E2E-TEST-USER.md` and, for a one-off out-of-band provision, its
+`scripts/provision-e2e-user.mjs`.
 
 ## What it does and does not cover
 
