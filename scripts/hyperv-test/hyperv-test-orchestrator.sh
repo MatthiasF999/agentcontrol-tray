@@ -33,9 +33,9 @@ set -euo pipefail
 # --- config ------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETUP_URL="https://install.agent-control.io/setup.exe"
-VM_NAME='AgentControl-Test'
+VM_NAME='agentcontrol-test-vm'
 SNAPSHOT_NAME='clean-agentcontrol-base'
-VM_USER='test'
+VM_USER='User'
 VM_IP_FALLBACK='172.31.0.10'          # static Internal-switch IP (BLUEPRINT §2)
 SSH_KEY="$HOME/.ssh/id_ed25519"
 STAGE_WIN='C:/AgentControlTest/staging'   # forward-slash form OpenSSH scp accepts

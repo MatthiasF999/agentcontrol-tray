@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Runs INSIDE the AgentControl-Test Hyper-V VM, invoked over SSH by
+  Runs INSIDE the agentcontrol-test-vm Hyper-V VM, invoked over SSH by
   hyperv-test-orchestrator.sh. Drives the installer / WSL bootstrapper flow,
   screenshots each phase, and writes <OutputRoot>\result.json for the
   orchestrator to scp back.
