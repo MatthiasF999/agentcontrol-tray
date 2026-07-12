@@ -184,12 +184,19 @@ function New-DevVm {
   Set-VM -Name $VmName -CheckpointType Standard -AutomaticCheckpointsEnabled $false
   Set-VMKeyProtector -VMName $VmName -NewLocalKeyProtector           # vTPM + Secure Boot (Gen2 Win11)
   Enable-VMTPM -VMName $VmName
+  Enable-VMIntegrationService -VMName $VmName -Name 'Guest Service Interface'
+  Info "guest service interface enabled (required for PowerShell Direct)"
   Info 'VM created; nested-virt exposed, vTPM enabled'
 }
 
 # ---- 5. connect over PowerShell Direct -------------------------------------
 function Connect-GuestSession {
   Info "starting VM; waiting up to ${ProvisionTimeoutMin}min for PowerShell Direct ..."
+  $gsi = Get-VMIntegrationService -VMName $VmName -Name 'Guest Service Interface'
+  if (-not $gsi.Enabled) {
+    Warn "Guest Service Interface disabled; enabling now (was: $($gsi.Enabled))"
+    Enable-VMIntegrationService -VMName $VmName -Name 'Guest Service Interface'
+  }
   if ((Get-VM -Name $VmName).State -ne 'Running') { Start-VM -Name $VmName }
   $candidates = if ($GuestPassword) { @($GuestPassword) } else { $GuestPasswordCandidates }
   $deadline = (Get-Date).AddMinutes($ProvisionTimeoutMin)
