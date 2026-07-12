@@ -204,12 +204,23 @@ function Step-UpdateWsl {
   # --no-distribution and honours WSL_UTF8. Silent-succeed when already current.
   # Blocks until the download finishes (30-60s on a stale box); no extra timeout
   # needed since Invoke-Wsl waits on wsl.exe rather than polling.
+  # Requires an elevated token; this runner drives PowerShell Direct into the
+  # VM's `User` account, whose UAC-filtered token can't launch the WSL platform
+  # MSI, so --update fails "requires elevation". We skip in that case -- the
+  # idempotent install-kernel/install-distro steps short-circuit on the
+  # pre-provisioned base image anyway, and a real user's installer elevates via
+  # UAC before touching wsl.
   $r = Invoke-Wsl @('--update')
   $shot = Save-Screenshot 'wsl-update'
-  if ($r.Code -ne 0 -and $r.Text -notmatch 'already the latest version|already installed') {
-    throw "wsl --update failed ($($r.Code)): $($r.Text.Trim())"
+  if ($r.Code -eq 0 -or $r.Text -match 'already the latest version|already installed') {
+    Add-Step 'update-wsl' 'pass' 'wsl --update (or already latest)' $shot
+    return
   }
-  Add-Step 'update-wsl' 'pass' 'wsl --update (or already latest)' $shot
+  if ($r.Text -match 'requires elevation|elevation required') {
+    Add-Step 'update-wsl' 'skip' 'wsl --update needs elevation; relying on pre-provisioned base' $shot
+    return
+  }
+  throw "wsl --update failed ($($r.Code)): $($r.Text.Trim())"
 }
 
 function Step-InstallKernel {
