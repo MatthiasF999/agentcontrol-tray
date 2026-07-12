@@ -146,7 +146,7 @@ and per-run exit code verbatim from `host-orchestrator.sh`.
 
 | 66d artifact | 66h reuse | Change |
 |---|---|---|
-| `sandbox-runner-wsl.ps1` step functions (`Step-InstallKernel` … `Step-VerifyPairFlow`) | ✅ Lift into `runner-vm.ps1` | Invoked over SSH, not LogonCommand; **drop** `Stop-Computer` (orchestrator does `Stop-VM`) |
+| `sandbox-runner-wsl.ps1` step functions (`Step-UpdateWsl` … `Step-VerifyPairFlow`) | ✅ Lift into `runner-vm.ps1` | Invoked over SSH, not LogonCommand; **drop** `Stop-Computer` (orchestrator does `Stop-VM`). 66j replaced the `wsl --install` kernel/distro steps with a single `Step-ImportDistro` (`wsl --import` of a staged rootfs) |
 | `helpers.psm1` (`Save-Screenshot`, `Write-Result`, `Set-OutputRoot`) | ✅ As-is | Staged over scp |
 | `verify-pair-flow.mjs` | ✅ **As-is, no dupe** | Runs in guest WSL Ubuntu; §5 |
 | `pair-verify.env` (gitignored service_role) | ✅ As-is | scp'd RO into guest staging; absent → step records `skip` |
@@ -158,11 +158,23 @@ The path substitution differs: 66d used the Sandbox mapped-folder
 `C:\AgentControlTest\staging` (WSL sees `/mnt/c/AgentControlTest/staging`).
 
 The lifted wsl-flow was also hardened (66j) to run on an older inbox `wsl.exe`
-(e.g. the WinDev2407Eval base): a `Step-UpdateWsl` runs `wsl --update` first so
-`--no-distribution` + `WSL_UTF8` are understood, `Step-InstallKernel` /
-`Step-InstallDistro` are idempotent (skip when the base snapshot already
-provides them), and `Invoke-Wsl` decodes UTF-16LE output from a pre-update
-`wsl.exe`.
+(e.g. the WinDev2407Eval base): a `Step-UpdateWsl` runs `wsl --update` first
+(soft-failing when it needs elevation the PS-Direct `User` token lacks), and
+`Invoke-Wsl` decodes UTF-16LE output from a pre-update `wsl.exe`.
+
+Distro provisioning is by **`wsl --import`, not `wsl --install`**. `Import-DevVM.ps1`
+registers `Ubuntu-22.04` in the base image, but it runs `wsl --import` as the
+`User` account over PowerShell Direct — a **network logon**, whose `HKCU` is a
+transient hive rather than the interactive `User`'s `NTUSER.DAT`. WSL keeps its
+per-user registration under `HKCU\…\CurrentVersion\Lxss`, so the base-image
+registration never reaches the session AutoLogon starts, and in-guest
+`wsl --list` reports "no installed distributions". `Step-ImportDistro` therefore
+re-imports a **staged rootfs** (`ubuntu-jammy-wsl.rootfs.tar.gz`, copied into the
+guest by the orchestrator) inside the interactive session via
+`wsl --import Ubuntu-22.04 C:\WSL\Ubuntu-22.04 <rootfs> --version 2`. `wsl --import`
+works on the old inbox `wsl.exe` (unlike `wsl --install --no-distribution`, which
+that vintage does not support) and is idempotent per run — it short-circuits when
+the distro is already registered in the session.
 
 ---
 
@@ -227,7 +239,7 @@ PowerShell-Direct, so the orchestrator's SSH data-channel is unchanged.
 - [ ] **Host WSL session survives** — no `wsl --shutdown`, Claude Code keeps running
 - [ ] Reproducible — every run starts from `clean-agentcontrol-base`, byte-identical
 - [ ] Integrates with existing `verify-pair-flow.mjs` (reused, not duplicated)
-- [ ] Full chain green in guest: WSL2 kernel → Ubuntu-22.04 → bridge install → bridge live → pair-flow verified
+- [ ] Full chain green in guest: `wsl --update` → import Ubuntu-22.04 (staged rootfs) → bridge install → bridge live → pair-flow verified
 
 ---
 
