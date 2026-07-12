@@ -183,6 +183,9 @@ runs `wsl.sh` and tolerates a non-zero exit at `[7/7]` — by then the bridge ta
 is unpacked, `.env` is present and node is installed, which is the state the test
 cares about. On any non-zero exit it falls back to launching the unpacked bridge
 directly (`nohup node dist/index.js`), verified by `Step-VerifyBridge`'s pgrep path.
+`Step-VerifyBridge` is pgrep-only (it no longer attempts `systemctl --user`, which is
+guaranteed to fail in our exec model) and retries pgrep up to 30s to survive WSL2
+auto-restart windows, tailing the bridge log + journal + dmesg on failure.
 Fixing the `systemctl --user` path properly is a `wsl.sh` product concern, not
 something the runner should hammer through.
 
