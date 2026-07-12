@@ -1,0 +1,29 @@
+# Dockerfile.tray — Flow B image for the AgentControl tray-app UI test.
+#
+# Best-effort (priority-2). Launches the Tauri tray under a virtual X server
+# (xvfb) and screenshots it. See README "Flow B caveats": a bare xvfb display
+# has NO StatusNotifier host, so the tray *icon* has nowhere to dock — this
+# image installs a minimal panel (xfce4-panel) to host the SNI, which is the
+# part most likely to need per-environment tweaking.
+#
+# Build:  docker build -f Dockerfile.tray -t agentcontrol-test-tray .
+# Run:    docker run --rm -v "$PWD/output:/output" agentcontrol-test-tray
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Groups: virtual X + screenshot/automation tooling; Tauri/WebKitGTK runtime
+# libs (webkit2gtk-4.1 + ayatana-appindicator match src-tauri deb depends);
+# xfce4-panel to provide a StatusNotifierWatcher for the tray icon.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      xvfb x11-utils xdotool imagemagick \
+      dbus-x11 xfce4-panel \
+      libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2 \
+      libgtk-3-0 libglib2.0-bin \
+      curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY tray-runner.sh /opt/linux-test/tray-runner.sh
+RUN chmod +x /opt/linux-test/tray-runner.sh && mkdir -p /output
+
+ENTRYPOINT ["/opt/linux-test/tray-runner.sh"]
