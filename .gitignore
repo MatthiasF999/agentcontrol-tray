@@ -34,3 +34,8 @@ bootstrapper/dl/
 # e2e pair-flow verifier — never commit the service_role key
 scripts/e2e-pair-verify/.env
 scripts/sandbox-test/pair-verify.env
+scripts/hyperv-test/pair-verify.env
+
+# hyperv-test runtime staging + collected output
+scripts/hyperv-test/.stage/
+scripts/hyperv-test/output/
