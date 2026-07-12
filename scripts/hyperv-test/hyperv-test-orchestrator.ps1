@@ -34,18 +34,23 @@ param(
   [string]$Local = '',
   [string]$VmName = 'agentcontrol-test-vm',
   [string]$SnapshotName = 'clean-agentcontrol-base',
-  [string]$OutputRoot = (Join-Path $PSScriptRoot 'output'),
+  [string]$OutputRoot = '',
   [switch]$KeepVmRunning
 )
 
 $ErrorActionPreference = 'Stop'
+
+# $PSScriptRoot is empty when param defaults are evaluated under `powershell.exe
+# -File`, so resolve the script dir in the body and fill any path defaults here.
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+if ([string]::IsNullOrEmpty($OutputRoot)) { $OutputRoot = Join-Path $scriptDir 'output' }
 
 # --- config ------------------------------------------------------------------
 $SetupUrl   = 'https://install.agent-control.io/setup.exe'
 $VmUser     = 'User'
 $StageWin   = 'C:\AgentControlTest\staging'
 $OutputWin  = 'C:\test-output'
-$StageLocal = Join-Path $PSScriptRoot '.stage'
+$StageLocal = Join-Path $scriptDir '.stage'
 
 function Log  { param([string]$Msg) Write-Host "[hyperv] $Msg" }
 function Fail { param([string]$Msg) [Console]::Error.WriteLine("[hyperv] FAIL: $Msg"); exit 1 }
@@ -109,14 +114,14 @@ function Copy-Inputs {
   param([System.Management.Automation.Runspaces.PSSession]$Session)
   if (Test-Path $StageLocal) { Remove-Item -Recurse -Force $StageLocal }
   New-Item -ItemType Directory -Force -Path $StageLocal | Out-Null
-  Copy-Item (Join-Path $PSScriptRoot 'runner-vm.ps1')   (Join-Path $StageLocal 'runner-vm.ps1')
-  Copy-Item (Join-Path $PSScriptRoot 'helpers-vm.psm1') (Join-Path $StageLocal 'helpers-vm.psm1')
+  Copy-Item (Join-Path $scriptDir 'runner-vm.ps1')   (Join-Path $StageLocal 'runner-vm.ps1')
+  Copy-Item (Join-Path $scriptDir 'helpers-vm.psm1') (Join-Path $StageLocal 'helpers-vm.psm1')
   if ($Flow -in 'wsl', 'full') {
     # verify-pair-flow.mjs is the single source of truth in e2e-pair-verify - copy
     # it into staging at run time, never duplicate it into the hyperv-test tree.
-    Copy-Item (Join-Path $PSScriptRoot '..\e2e-pair-verify\verify-pair-flow.mjs') (Join-Path $StageLocal 'verify-pair-flow.mjs')
+    Copy-Item (Join-Path $scriptDir '..\e2e-pair-verify\verify-pair-flow.mjs') (Join-Path $StageLocal 'verify-pair-flow.mjs')
     # service_role key: gitignored host file; present -> pair-flow runs, else skip.
-    $envHost = Join-Path $PSScriptRoot 'pair-verify.env'
+    $envHost = Join-Path $scriptDir 'pair-verify.env'
     if (Test-Path $envHost) {
       Log 'staging pair-verify.env (service_role, RO)'
       Copy-Item $envHost (Join-Path $StageLocal 'pair-verify.env')
