@@ -176,6 +176,12 @@ works on the old inbox `wsl.exe` (unlike `wsl --install --no-distribution`, whic
 that vintage does not support) and is idempotent per run — it short-circuits when
 the distro is already registered in the session.
 
+Before invoking `wsl.sh`, `Step-InstallBridge` preps the freshly-imported rootfs so
+its `systemctl --user` call has a D-Bus session: write `/etc/wsl.conf` (`systemd=true`)
++ `wsl --terminate` to reboot into systemd, `loginctl enable-linger root`, and preset
+`XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS` — falling back to a `nohup node` start
+(picked up by `Step-VerifyBridge`'s pgrep path) if the user unit still fails.
+
 ---
 
 ## 5. Integration with `verify-pair-flow.mjs` (no duplication)
