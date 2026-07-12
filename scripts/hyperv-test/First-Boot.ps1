@@ -33,6 +33,50 @@ function Log { param([string]$m)
   Write-Host $line
 }
 
+# ---- phase marker + resume-after-reboot plumbing ----------------------------
+# On a fresh Win11 25H2 eval image the WSL optional features report
+# RestartRequired=Possible; the WSL kernel stays inert until the box reboots, so
+# `wsl --import` fails with -1. We enable the features, reboot, and resume via an
+# AtLogon scheduled task (AutoLogon re-fires and the task re-runs this script --
+# FirstLogonCommands only fire on the very first logon, not after reboot). The
+# registry marker records progress across the reboot AND guards against an
+# infinite reboot loop.
+$PhaseKey        = 'HKLM:\SOFTWARE\AgentControl'
+$ResumeTaskName  = 'AgentControlFirstBootPhase2'
+$ScriptPath      = $MyInvocation.MyCommand.Path
+$script:RestartNeeded = $false
+
+function Get-FirstBootPhase {
+  (Get-ItemProperty -Path $PhaseKey -Name FirstBootPhase -ErrorAction SilentlyContinue).FirstBootPhase
+}
+function Set-FirstBootPhase { param([string]$Phase)
+  if (-not (Test-Path $PhaseKey)) { New-Item -Path $PhaseKey -Force | Out-Null }
+  Set-ItemProperty -Path $PhaseKey -Name FirstBootPhase -Value $Phase
+  Log "phase marker => $Phase"
+}
+function Register-ResumeTask {
+  $action    = New-ScheduledTaskAction -Execute 'powershell.exe' `
+    -Argument ("-NoProfile -ExecutionPolicy Bypass -File `"{0}`"" -f $ScriptPath)
+  $trigger   = New-ScheduledTaskTrigger -AtLogOn -User Administrator
+  # Interactive principal: runs inside the AutoLogon session, no stored password.
+  $principal = New-ScheduledTaskPrincipal -UserId Administrator -RunLevel Highest -LogonType Interactive
+  Register-ScheduledTask -TaskName $ResumeTaskName -Action $action -Trigger $trigger `
+    -Principal $principal -Force | Out-Null
+  Log "registered resume task '$ResumeTaskName' (AtLogon/Administrator)"
+}
+function Unregister-ResumeTask {
+  if (Get-ScheduledTask -TaskName $ResumeTaskName -ErrorAction SilentlyContinue) {
+    Unregister-ScheduledTask -TaskName $ResumeTaskName -Confirm:$false
+    Log "unregistered resume task '$ResumeTaskName'"
+  }
+}
+
+# Already fully provisioned (e.g. a base-image re-run): no-op so we never loop.
+if ((Get-FirstBootPhase) -eq 'complete') {
+  Log "FirstBootPhase=complete; nothing to do"
+  return
+}
+
 $pubKeyPath = Join-Path $ProvisioningDir 'host_id.pub'
 $kernelMsi  = Join-Path $ProvisioningDir 'wsl_update_x64.msi'
 $rootfsTar  = Join-Path $ProvisioningDir 'ubuntu-jammy.tar.gz'
@@ -87,8 +131,14 @@ function Install-WslKernel {
   foreach ($feat in @('Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform')) {
     $s = Get-WindowsOptionalFeature -Online -FeatureName $feat
     if ($s.State -ne 'Enabled') {
-      Enable-WindowsOptionalFeature -Online -FeatureName $feat -NoRestart -All | Out-Null
-      Log "enabled optional feature $feat"
+      $r = Enable-WindowsOptionalFeature -Online -FeatureName $feat -NoRestart -All
+      if ($r.RestartNeeded) { $script:RestartNeeded = $true }
+      Log "enabled optional feature $feat (RestartNeeded=$($r.RestartNeeded))"
+    } elseif ($s.RestartRequired -and "$($s.RestartRequired)" -ne 'No') {
+      # Pre-enabled (nested-virt) but the box has not rebooted since, so the WSL
+      # kernel is still inert -- a reboot is required before `wsl --import`.
+      $script:RestartNeeded = $true
+      Log "optional feature $feat already enabled but RestartRequired=$($s.RestartRequired)"
     }
   }
   # Win11 25H2+ ships WSL as a built-in Store app; the standalone
@@ -107,11 +157,31 @@ function Install-WslKernel {
   }
   if (-not $msiOk) {
     # Native path (Win11 25H2+): wsl --install --no-distribution --no-launch
-    & wsl.exe --install --no-distribution --no-launch 2>&1 | ForEach-Object { Log "wsl --install: $_" }
+    $out = & wsl.exe --install --no-distribution --no-launch 2>&1
+    $out | ForEach-Object { Log "wsl --install: $_" }
     if ($LASTEXITCODE -ne 0) { throw "wsl --install failed (exit $LASTEXITCODE)" }
+    if ("$out" -match 'reboot|restart') { $script:RestartNeeded = $true }
   }
   & wsl.exe --set-default-version 2 | Out-Null
   Log "WSL2 kernel installed; default version = 2"
+}
+
+function Invoke-RebootIfRequired {
+  if (-not $script:RestartNeeded) { return }
+  # Loop guard: if we already rebooted once for this reason, do NOT reboot again
+  # -- proceed and let `wsl --import` try, since a second reboot would not help.
+  if ((Get-FirstBootPhase) -eq 'features-enabled-pending-reboot') {
+    Log "restart still flagged after a prior reboot; proceeding without another reboot"
+    return
+  }
+  Set-FirstBootPhase 'features-enabled-pending-reboot'
+  Register-ResumeTask
+  Log "WSL features enabled but reboot required; rebooting + resuming via task"
+  Restart-Computer -Force
+  # Restart-Computer returns before the box goes down; hold here so we never race
+  # into `wsl --import` (which would fail -1) during the shutdown window.
+  Start-Sleep -Seconds 120
+  exit 0
 }
 
 function Import-UbuntuDistro {
@@ -122,7 +192,15 @@ function Import-UbuntuDistro {
   } else {
     New-Item -ItemType Directory -Force -Path $WslInstallDir | Out-Null
     & wsl.exe --import $Distro $WslInstallDir $rootfsTar --version 2
-    if ($LASTEXITCODE -ne 0) { throw "wsl --import $Distro failed ($LASTEXITCODE)" }
+    if ($LASTEXITCODE -ne 0) {
+      # A just-installed WSL can be in a pending state where the service is not
+      # ready; a shutdown + single retry clears it (short of a full reboot).
+      Log "wsl --import $Distro failed ($LASTEXITCODE); wsl --shutdown + retry"
+      & wsl.exe --shutdown 2>&1 | ForEach-Object { Log "wsl --shutdown: $_" }
+      Start-Sleep -Seconds 8
+      & wsl.exe --import $Distro $WslInstallDir $rootfsTar --version 2
+      if ($LASTEXITCODE -ne 0) { throw "wsl --import $Distro failed after retry ($LASTEXITCODE)" }
+    }
     Log "$Distro imported to $WslInstallDir"
   }
   & wsl.exe --set-default $Distro | Out-Null
@@ -153,6 +231,10 @@ function Complete-Provisioning {
   # Turn off the unattended auto-login now that provisioning is done.
   $winlogon = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
   Set-ItemProperty -Path $winlogon -Name AutoAdminLogon -Value '0' -ErrorAction SilentlyContinue
+  # Remove the resume task (harmless no-op if we never rebooted) and mark done
+  # so any later re-run short-circuits at the top.
+  Unregister-ResumeTask
+  Set-FirstBootPhase 'complete'
   $stamp = (Get-Date).ToUniversalTime().ToString('o')
   Set-Content -Path 'C:\provisioning-complete.txt' -Value $stamp -Encoding ascii
   Log "provisioning complete @ $stamp"
@@ -163,6 +245,7 @@ try {
   Install-OpenSSHServer
   Set-AdminAuthorizedKey
   Install-WslKernel
+  Invoke-RebootIfRequired
   Import-UbuntuDistro
   Set-UbuntuDevUser
   Complete-Provisioning
