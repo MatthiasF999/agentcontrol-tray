@@ -99,8 +99,14 @@ jobs:
       # `--bundles app` emits the .app only (skip the slower dmg). Unsigned:
       # no APPLE_CERTIFICATE needed since we run the bundle locally on the
       # same runner (no Gatekeeper quarantine on a locally built app).
+      #
+      # `-c createUpdaterArtifacts:false` overrides tauri.conf.json (which sets
+      # it true + an updater pubkey). Left on, the build demands
+      # TAURI_SIGNING_PRIVATE_KEY to sign the `.app.tar.gz` updater payload —
+      # irrelevant for a throwaway test build. Disabling it skips updater
+      # signing entirely while still emitting the `.app` the smoke needs.
       - name: Build tray .app
-        run: pnpm tauri build --target aarch64-apple-darwin --bundles app
+        run: pnpm tauri build --target aarch64-apple-darwin --bundles app -c '{"bundle":{"createUpdaterArtifacts":false}}'
 
       - name: Run tray smoke
         env:

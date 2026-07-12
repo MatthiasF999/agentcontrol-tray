@@ -36,23 +36,24 @@ Both upload `output/` (result.json + logs + screenshots) as an artifact,
 
 - `helpers.sh` — shared primitives: `Save-Screenshot`, `Run-AppleScript`,
   `Wait-Window`, `Wait-Http`, `Write-Result` (jq-based). Sourced, not run.
-- `install-mac.sh` — **half-shipped** macOS bridge installer (see below).
+- `install-mac.sh` — macOS bridge installer, native-macOS peer of `wsl.sh`
+  (see below).
 - `bridge-runner.sh` — bridge job body.
 - `tray-runner.sh` — tray job body.
 
-## `install-mac.sh` is half-shipped
+## `install-mac.sh`
 
-The production install host serves only `wsl.sh` + `bridge.tar.gz` (the
-Windows/Linux/WSL path). **There is no `install.agent-control.io/mac.sh`
-yet.** `install-mac.sh` vendors the native-macOS equivalent in-repo:
-download tarball → `npm install && npm run build` → write `.env`
-(`PORT=3001` + API key) → `~/Library/LaunchAgents/io.agentcontrol.bridge.plist`
-→ `launchctl bootstrap`.
+The native-macOS peer of `wsl.sh`: ensure Node (Homebrew fallback) →
+download the prebuilt `bridge.tar.gz` → `npm ci --omit=dev` (no build
+step — the tarball ships `dist/`) → write `.env` (`PORT=3001` + API key,
+preserved across upgrades) → `~/Library/LaunchAgents/io.agentcontrol.bridge.plist`
+→ `launchctl bootstrap`. Idempotent (re-run to upgrade).
 
-**Follow-up (separate PR):** promote it to
-`install.agent-control.io/mac.sh` so
-`curl -fsSL https://install.agent-control.io/mac.sh | bash` works like
-`wsl.sh` does today.
+This file is the **source of truth** for the served
+`install.agent-control.io/mac.sh` — the supabase repo commits a
+byte-identical `install/mac.sh` snapshot (drift-guarded in CI), mirroring
+how `install/wsl.sh` snapshots the bridge's `setup-wsl.sh`. Edit it here,
+then re-sync the snapshot.
 
 ## Known limitations
 
