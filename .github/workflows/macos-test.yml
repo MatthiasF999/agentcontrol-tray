@@ -1,0 +1,124 @@
+# macos-test.yml — automated end-to-end smoke of the bridge + tray app on a
+# real macOS host. macOS cannot be virtualised off-Darwin (Apple SLA), so
+# this runs on GitHub's hosted `macos-15` runner (Apple Silicon, ephemeral).
+#
+# Trigger it manually (`gh workflow run macos-test.yml`) or let it auto-smoke
+# on push to main / relevant PRs. Both jobs upload `output/` (result.json,
+# logs, screenshots) as artifacts for post-mortem — see scripts/macos-test/README.md.
+#
+# Runners are Apple Silicon → aarch64-apple-darwin (no cross-compile needed).
+
+name: macOS Test Harness
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src-tauri/**'
+      - 'scripts/macos-test/**'
+      - '.github/workflows/macos-test.yml'
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - 'scripts/macos-test/**'
+      - '.github/workflows/macos-test.yml'
+
+# Opt JS actions into Node 24 (matches build-release.yml).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+concurrency:
+  group: macos-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bridge:
+    name: Bridge smoke (launchd)
+    runs-on: macos-15
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The bridge builds from a TypeScript tarball via npm; jq + openssl +
+      # screencapture are preinstalled on macos-15.
+      - name: Run bridge smoke
+        env:
+          OUTPUT_DIR: ${{ github.workspace }}/output
+          AGENTCONTROL_HOST: ${{ vars.HETZNER_HOST || 'agent-control.io' }}
+          STRICT: '0'
+        run: bash scripts/macos-test/bridge-runner.sh
+
+      - name: Upload bridge artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bridge-macos-output
+          path: output/
+          if-no-files-found: warn
+          retention-days: 7
+
+  tray:
+    name: Tray smoke (.app)
+    runs-on: macos-15
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache Rust deps (Swatinem)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: macos-15-aarch64
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install web deps
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      # `--bundles app` emits the .app only (skip the slower dmg). Unsigned:
+      # no APPLE_CERTIFICATE needed since we run the bundle locally on the
+      # same runner (no Gatekeeper quarantine on a locally built app).
+      #
+      # `-c createUpdaterArtifacts:false` overrides tauri.conf.json (which sets
+      # it true + an updater pubkey). Left on, the build demands
+      # TAURI_SIGNING_PRIVATE_KEY to sign the `.app.tar.gz` updater payload —
+      # irrelevant for a throwaway test build. Disabling it skips updater
+      # signing entirely while still emitting the `.app` the smoke needs.
+      - name: Build tray .app
+        run: pnpm tauri build --target aarch64-apple-darwin --bundles app -c '{"bundle":{"createUpdaterArtifacts":false}}'
+
+      - name: Run tray smoke
+        env:
+          OUTPUT_DIR: ${{ github.workspace }}/output
+          STRICT: '0'
+        run: bash scripts/macos-test/tray-runner.sh
+
+      - name: Upload tray artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tray-macos-output
+          path: output/
+          if-no-files-found: warn
+          retention-days: 7
