@@ -43,6 +43,12 @@ param(
   [int]$CpuCount          = 4,
   [int]$DiskGB            = 64,
   [int]$ProvisioningTimeoutMin = 40,
+  # Win11 25H2+ can ignore unattend AutoLogon and park at the login screen. If the
+  # guest has an IP but sshd stays silent this many minutes, Wait-Provisioning
+  # prints a one-time "sign in once by hand" hint. Kept above the ~login+sshd-up
+  # window so a healthy slow boot does not trip it; lower it if your host logs in
+  # faster, raise it if healthy boots are slower. See README troubleshooting.
+  [int]$ManualLoginHintMin = 10,
   [switch]$Force,
   # Resume a crashed run: the VM already exists and is (or was) provisioning.
   # Skips ISO/VHDX build, payload injection and VM creation; jumps straight to
@@ -246,6 +252,8 @@ function Wait-Provisioning {
   $deadline = (Get-Date).AddMinutes($ProvisioningTimeoutMin)
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $ip = $null
+  $sshAnswered = $false   # has the guest's sshd ever completed a probe?
+  $hintShown   = $false   # manual-login hint is one-time, never spammed
   do {
     Start-Sleep -Seconds 20
     $elapsed = $sw.Elapsed.ToString('mm\:ss')
@@ -266,14 +274,27 @@ function Wait-Provisioning {
         $probe = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no `
           -o ConnectTimeout=5 "Administrator@$ip" `
           'if (Test-Path C:\provisioning-complete.txt) { "DONE" } elseif (Test-Path C:\provisioning-failed.txt) { "FAILED" } else { "WAIT" }' 2>$null
-        if ($LASTEXITCODE -ne 0) { $probe = 'WAIT' }
+        if ($LASTEXITCODE -eq 0) { $sshAnswered = $true } else { $probe = 'WAIT' }
       } catch { $probe = 'WAIT' }
       if ($probe -match 'DONE')   { Info "provisioning complete (elapsed $elapsed)"; return $ip }
       if ($probe -match 'FAILED') { throw 'guest provisioning failed -- see C:\provisioning\first-boot.log inside the VM' }
     }
+    # Win11 25H2+ (build 26200) sometimes ignores the unattend <AutoLogon> and
+    # parks at the login screen, so First-Boot.ps1 -- and with it sshd -- never
+    # start and the probe above never answers. The guest still gets a DHCP IP
+    # from the NIC, so "IP present but sshd silent past $ManualLoginHintMin min" is the tell. Prompt
+    # the operator to sign in ONCE by hand (FirstLogonCommands then fires and
+    # provisioning continues); happy-path slow boots answer sshd well before this
+    # and are excluded via $sshAnswered, so the hint prints at most once.
+    if ($ip -and -not $sshAnswered -and -not $hintShown -and $sw.Elapsed.TotalMinutes -ge $ManualLoginHintMin) {
+      Warn "guest has IP $ip but sshd has not answered in $elapsed. On Win11 25H2+ the VM can ignore unattend AutoLogon and sit at the login screen."
+      Warn "If so: open '$VmName' in Hyper-V Manager, click Administrator, sign in once with password 'AgentControl!Test1'. First-Boot.ps1 then runs on its own and this wait continues."
+      $hintShown = $true
+    }
     Info "provisioning... elapsed $elapsed ($(if ($ip) { "guest $ip, installing/oobe" } else { 'waiting for guest IP' }))"
   } while ((Get-Date) -lt $deadline)
-  throw "provisioning did not complete within ${ProvisioningTimeoutMin}min (SSH reachable=$([bool]$ip))"
+  $hint = if ($ip -and -not $sshAnswered) { ' Guest had an IP but sshd never answered -- likely parked at the login screen (Win11 25H2+ AutoLogon), sign in once by hand: see README troubleshooting.' } else { '' }
+  throw "provisioning did not complete within ${ProvisioningTimeoutMin}min (guest IP=$([bool]$ip), sshd answered=$sshAnswered).$hint"
 }
 
 # ---- 5. finalize: detach ISO, shut down, snapshot --------------------------
