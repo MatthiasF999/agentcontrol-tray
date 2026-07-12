@@ -103,6 +103,26 @@ real access path):
 
 ## Troubleshooting
 
+### Watching provisioning progress (Basic vs Enhanced Session Mode)
+
+Hyper-V Manager's VMConnect has TWO connection modes:
+
+- **Enhanced Session Mode (ESM)** — default. Uses an RDP-like wrapper that shows
+  its own guest-credentials dialog BEFORE connecting. Even when AutoLogon has
+  successfully logged the guest into Windows, ESM's own credential prompt makes
+  it LOOK like AutoLogon failed. This is a false alarm.
+
+- **Basic Session Mode** — raw video output. Shows what Windows is actually
+  displaying. AutoLogon events are visible here.
+
+**To watch AutoLogon + First-Boot.ps1 progress**: in VMConnect, switch off ESM:
+`View menu → Enhanced Session → uncheck` (or press `Ctrl+Alt+End`). Reconnect.
+You should see Windows boot → auto-login as Administrator → First-Boot.ps1
+PowerShell console pops up.
+
+**If Basic Session Mode ALSO lands on a login screen**, THEN AutoLogon is truly
+broken — apply the "Manual login on first boot" step below.
+
 | Symptom | Likely cause / fix |
 |---------|--------------------|
 | `must run elevated` | Start PowerShell as Administrator. |
@@ -111,7 +131,7 @@ real access path):
 | `Convert-WindowsImage did not produce a VHDX` | Wrong `-Edition` string — list editions with `Get-WindowsImage -ImagePath <mounted>\sources\install.wim`; eval media is usually `Windows 11 Enterprise Evaluation`. |
 | `need >= 40GB free` | Free space or point `-WorkDir` at a bigger drive. |
 | **VM lands at the login screen instead of auto-logging in** | AutoLogon in `AutoUnattend.xml` is broken. On Windows 11 26200 the usual cause is a `SkipMachineOOBE`/`SkipUserOOBE` in the OOBE block (both are deprecated and short-circuit the OOBE machine that writes the AutoAdminLogon registry values *and* registers FirstLogonCommands, so AutoLogon **and** First-Boot.ps1 both silently fail). Remove them and rely on the `Hide*` settings. Second cause: the built-in `Administrator` configured via `<LocalAccount>` (name collision) instead of `<AdministratorPassword>`, so the AutoLogon password ends up out of sync. `Build-BaseImage.ps1`'s `Test-Unattend` now fails fast on a missing AutoLogon/FirstLogonCommands and warns on `Skip*OOBE`. **On Win11 25H2+ AutoLogon can be ignored even with a valid answer file** (Microsoft is deprecating password AutoLogon in favour of Passkeys / Windows Hello) -- see the dedicated row below; this is a known limitation, not a build bug. |
-| **Win11 25H2+ (build 26200): one manual login on first boot** | On 25H2 the VM may sit at the login screen despite a valid `<AutoLogon>` block. This is expected and needs **one** manual step, once, on the first base-image build: (1) open `agentcontrol-test-vm` in **Hyper-V Manager** (Connect); (2) at the login screen click **Administrator**; (3) type the password `AgentControl!Test1` and press Enter. `First-Boot.ps1` then fires automatically via `FirstLogonCommands`, provisioning runs to completion, and the builder's SSH poll picks it up from there. The builder detects this case: once the guest has an IP but sshd stays silent past `-ManualLoginHintMin` minutes (default 10) it prints a one-time hint with these exact steps. After this build the base snapshot is captured, so per-run orchestrator reverts never hit the login screen again. |
+| **Win11 25H2+ (build 26200): one manual login on first boot** *(second troubleshooting step — only after the Basic-vs-ESM check above)* | **First rule out Enhanced Session Mode** (see "Watching provisioning progress" above): a login screen under ESM is usually a false alarm and AutoLogon actually worked. Only if **Basic Session Mode ALSO** lands on a login screen is AutoLogon genuinely broken. In that real-failure case the VM may sit at the login screen despite a valid `<AutoLogon>` block. This needs **one** manual step, once, on the first base-image build: (1) open `agentcontrol-test-vm` in **Hyper-V Manager** (Connect, in Basic Session Mode); (2) at the login screen click **Administrator**; (3) type the password `AgentControl!Test1` and press Enter. `First-Boot.ps1` then fires automatically via `FirstLogonCommands`, provisioning runs to completion, and the builder's SSH poll picks it up from there. The builder detects this case: once the guest has an IP but sshd stays silent past `-ManualLoginHintMin` minutes (default 10) it prints a one-time hint with these exact steps. After this build the base snapshot is captured, so per-run orchestrator reverts never hit the login screen again. |
 | **First-Boot log shows `wsl_update_x64.msi install failed (exit 1603)`** | Win11 25H2 (build 26200) ships WSL as a built-in Store app; the standalone `wsl_update_x64.msi` is deprecated and its MSI install fails with 1603. **No action needed** -- `First-Boot.ps1` automatically falls back to native `wsl --install --no-distribution --no-launch` and continues. If that native path **also** fails, log into the guest and run `wsl --status` manually, then confirm the `Microsoft-Windows-Subsystem-Linux` and `VirtualMachinePlatform` Windows features are enabled (`Get-WindowsOptionalFeature -Online -FeatureName <name>`). |
 | Provisioning never completes / SSH never answers | Open the VM in Hyper-V Manager, log in (`Administrator` / password above), read `C:\provisioning\first-boot.log`. Common causes: no host pubkey, download blocked, nested-virt not actually available on the physical host. |
 | `guest provisioning failed` | `C:\provisioning-failed.txt` + `first-boot.log` inside the VM have the error. |
