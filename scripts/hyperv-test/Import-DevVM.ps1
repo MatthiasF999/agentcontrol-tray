@@ -196,7 +196,12 @@ function Connect-GuestSession {
   do {
     Start-Sleep -Seconds 15
     foreach ($pw in $candidates) {
-      $sec = ConvertTo-SecureString ($pw) -AsPlainText -Force
+      # ConvertTo-SecureString rejects an empty string -> use an empty SecureString directly.
+      $sec = if ([string]::IsNullOrEmpty($pw)) {
+        New-Object System.Security.SecureString
+      } else {
+        ConvertTo-SecureString $pw -AsPlainText -Force
+      }
       $cred = New-Object System.Management.Automation.PSCredential($GuestUser, $sec)
       try {
         $s = New-PSSession -VMName $VmName -Credential $cred -ErrorAction Stop
