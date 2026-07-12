@@ -14,6 +14,7 @@
 .EXAMPLE
   pwsh -File Build-BaseImage.ps1
   pwsh -File Build-BaseImage.ps1 -IsoPath D:\iso\Win11-Eval.iso -Force
+  pwsh -File Build-BaseImage.ps1 -Resume   # after a mid-provisioning crash
 
 .NOTES
   # @line-limit-exception: single linear one-time build pipeline; the step
@@ -42,7 +43,12 @@ param(
   [int]$CpuCount          = 4,
   [int]$DiskGB            = 64,
   [int]$ProvisioningTimeoutMin = 40,
-  [switch]$Force
+  [switch]$Force,
+  # Resume a crashed run: the VM already exists and is (or was) provisioning.
+  # Skips ISO/VHDX build, payload injection and VM creation; jumps straight to
+  # the provisioning wait + snapshot. Use after the script died mid-Wait (e.g.
+  # the pre-sshd SSH-probe stderr crash) with a VM left running.
+  [switch]$Resume
 )
 
 $ErrorActionPreference = 'Stop'
@@ -191,7 +197,7 @@ function Wait-Provisioning {
   # file is readable over SSH once written. Fall back to a fixed wait if SSH
   # never answers (headless host with no key path) -- see README troubleshooting.
   Info "starting VM; waiting up to ${ProvisioningTimeoutMin}min for provisioning ..."
-  Start-VM -Name $VmName
+  if ((Get-VM -Name $VmName).State -ne 'Running') { Start-VM -Name $VmName }
   $deadline = (Get-Date).AddMinutes($ProvisioningTimeoutMin)
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $ip = $null
@@ -204,9 +210,19 @@ function Wait-Provisioning {
       if ($ip) { Info "guest IP: $ip" }
     }
     if ($ip) {
-      $probe = ssh -o BatchMode=yes -o StrictHostKeyChecking=no `
-        -o ConnectTimeout=5 "Administrator@$ip" `
-        'if (Test-Path C:\provisioning-complete.txt) { "DONE" } elseif (Test-Path C:\provisioning-failed.txt) { "FAILED" } else { "WAIT" }' 2>$null
+      # The guest's OpenSSH is absent for the first ~15-25min of boot, so early
+      # probes time out. Under $ErrorActionPreference=Stop, PS 5.1 turns a native
+      # command's stderr into a terminating NativeCommandError, and 2>$null does
+      # not fully suppress it -- so wrap in try/catch and treat any failure (or
+      # non-zero exit) as a plain 'WAIT'. This keeps the loop (and its per-tick
+      # Info heartbeat below) alive until sshd answers.
+      $probe = 'WAIT'
+      try {
+        $probe = & ssh -o BatchMode=yes -o StrictHostKeyChecking=no `
+          -o ConnectTimeout=5 "Administrator@$ip" `
+          'if (Test-Path C:\provisioning-complete.txt) { "DONE" } elseif (Test-Path C:\provisioning-failed.txt) { "FAILED" } else { "WAIT" }' 2>$null
+        if ($LASTEXITCODE -ne 0) { $probe = 'WAIT' }
+      } catch { $probe = 'WAIT' }
       if ($probe -match 'DONE')   { Info "provisioning complete (elapsed $elapsed)"; return $ip }
       if ($probe -match 'FAILED') { throw 'guest provisioning failed -- see C:\provisioning\first-boot.log inside the VM' }
     }
@@ -248,9 +264,20 @@ function Complete-Base {
 
 # ---- run --------------------------------------------------------------------
 Test-Prereqs
-New-InjectionPayload
-New-BaseVhdx
-Copy-PayloadIntoVhdx
-New-TestVm
+if ($Resume) {
+  if (-not (Get-VM -Name $VmName -ErrorAction SilentlyContinue)) {
+    throw "-Resume: VM '$VmName' not found -- nothing to resume. Run without -Resume to build from scratch."
+  }
+  if (Get-VMSnapshot -VMName $VmName -Name $SnapshotName -ErrorAction SilentlyContinue) {
+    Warn "-Resume: snapshot '$SnapshotName' already exists -- base image looks complete; leaving it. Pass -Force (no -Resume) to rebuild."
+    return
+  }
+  Info "resume: VM '$VmName' exists, no snapshot yet -- skipping build/inject/create, continuing to provisioning wait"
+} else {
+  New-InjectionPayload
+  New-BaseVhdx
+  Copy-PayloadIntoVhdx
+  New-TestVm
+}
 $guestIp = Wait-Provisioning
 Complete-Base -GuestIp $guestIp
