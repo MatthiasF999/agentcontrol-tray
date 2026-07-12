@@ -32,6 +32,7 @@ interface Setters {
   setPhase: (p: PairPhase) => void;
   setError: (e: string | null) => void;
   setClaimCode: (c: string) => void;
+  setLabel: (l: string) => void;
 }
 
 interface PairCtx {
@@ -133,6 +134,7 @@ async function bootstrap(ctx: PairCtx): Promise<void> {
   try {
     const code = await waitForClaimCode(ctx.distro);
     ctx.label = await getMachineLabel();
+    ctx.ui.setLabel(ctx.label);
     ctx.ui.setClaimCode(code);
     ctx.ui.setPhase('waiting');
     await openPairInstallerSignIn(code, ctx.label);
@@ -146,6 +148,7 @@ export interface PairFlow {
   phase: PairPhase;
   error: string | null;
   claimCode: string;
+  label: string;
   retry: () => void;
 }
 
@@ -156,6 +159,7 @@ export function usePairFlow(
   const [phase, setPhase] = useState<PairPhase>('preparing');
   const [error, setError] = useState<string | null>(null);
   const [claimCode, setClaimCode] = useState('');
+  const [label, setLabel] = useState('');
   const ctxRef = useRef<PairCtx | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once on mount
@@ -163,7 +167,7 @@ export function usePairFlow(
     const ctx: PairCtx = {
       distro,
       dispatch,
-      ui: { setPhase, setError, setClaimCode },
+      ui: { setPhase, setError, setClaimCode, setLabel },
       label: '',
       settled: false,
       timers: new Set(),
@@ -186,5 +190,5 @@ export function usePairFlow(
     void bootstrap(ctx);
   }, []);
 
-  return { phase, error, claimCode, retry };
+  return { phase, error, claimCode, label, retry };
 }

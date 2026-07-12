@@ -1,4 +1,4 @@
-import { openOperatorPortal } from '../api';
+import { openPairInstallerSignIn } from '../api';
 import type { ScreenProps } from '../state';
 import { type PairFlow, type PairPhase, usePairFlow } from '../usePairFlow';
 
@@ -10,19 +10,19 @@ const STATUS: Record<PairPhase, string> = {
   manual: 'Sign-in is taking longer than expected.',
 };
 
-function ManualHint() {
+function ManualHint({ flow }: { flow: PairFlow }) {
   return (
     <div className="step-hint">
       <p>
-        We didn't hear back from the browser. Finish signing in at the operator
-        portal — pairing completes automatically once it does.
+        We didn't hear back from the browser. Finish signing in in your browser
+        — pairing completes automatically once it does.
       </p>
       <button
         type="button"
         className="text-link"
-        onClick={() => void openOperatorPortal()}
+        onClick={() => void openPairInstallerSignIn(flow.claimCode, flow.label)}
       >
-        Reopen operator portal
+        Reopen sign-in page
       </button>
     </div>
   );
@@ -77,7 +77,7 @@ export function Pair({ state, dispatch }: ScreenProps) {
       {flow.error ? (
         <div className="step-error-banner">{flow.error}</div>
       ) : flow.phase === 'manual' ? (
-        <ManualHint />
+        <ManualHint flow={flow} />
       ) : (
         <p className="step-hint">{STATUS[flow.phase]}</p>
       )}
