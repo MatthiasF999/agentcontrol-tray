@@ -1,14 +1,14 @@
-<#
+﻿<#
 .SYNOPSIS
   ONE-TIME builder for the Phase 66h Hyper-V test VM. Turns a Windows 11
   Enterprise 90-day evaluation ISO into a ready-to-clone Hyper-V guest with
   WSL2 + Ubuntu-22.04 + OpenSSH pre-installed, then snapshots it as
-  `clean-agentcontrol-base` — the immutable golden state the per-run
+  `clean-agentcontrol-base` -- the immutable golden state the per-run
   orchestrator (Phase 66h.2) reverts to before every test.
 
   Run elevated (admin) on a Windows 11 Pro/Enterprise host with Hyper-V enabled.
   Idempotent: re-running reuses an existing VHDX/VM/snapshot rather than
-  rebuilding. Does NOT touch the host's own WSL — that is the entire point of the
+  rebuilding. Does NOT touch the host's own WSL -- that is the entire point of the
   VM approach (see BLUEPRINT.md §"Why Windows Sandbox can't do this").
 
 .EXAMPLE
@@ -34,7 +34,8 @@ param(
   # reads the host Ubuntu WSL key over the \\wsl$ share.
   [string]$HostPubKeyPath = '\\wsl$\Ubuntu\home\dev\.ssh\id_ed25519.pub',
   [string]$WslKernelUrl   = 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi',
-  [string]$UbuntuRootfsUrl = 'https://cloud-images.ubuntu.com/wsl/jammy/current/ubuntu-jammy-wsl-amd64-wsl.rootfs.tar.gz',
+  # Canonical periodically moves WSL rootfs paths -- verify by curl -sIL before merging
+  [string]$UbuntuRootfsUrl = 'https://cloud-images.ubuntu.com/wsl/releases/jammy/current/ubuntu-jammy-wsl-amd64-wsl.rootfs.tar.gz',
   # Canonical Microsoft ISO->VHDX converter; downloaded once into $WorkDir.
   [string]$ConvertImageUrl = 'https://raw.githubusercontent.com/MicrosoftDocs/Virtualization-Documentation/main/hyperv-tools/Convert-WindowsImage/Convert-WindowsImage.ps1',
   [int]$MemoryGB          = 8,
@@ -63,7 +64,7 @@ function Start-Heartbeat {
   }
   Start-ThreadJob -StreamingHost $Host -ArgumentList $Label -ScriptBlock {
     param($l); $sw = [Diagnostics.Stopwatch]::StartNew()
-    while ($true) { Start-Sleep -Seconds 30; Write-Host "[build] $l — elapsed $($sw.Elapsed.ToString('mm\:ss'))" -ForegroundColor DarkCyan }
+    while ($true) { Start-Sleep -Seconds 30; Write-Host "[build] $l -- elapsed $($sw.Elapsed.ToString('mm\:ss'))" -ForegroundColor DarkCyan }
   }
 }
 function Stop-Heartbeat {
@@ -97,7 +98,7 @@ function Test-Prereqs {
   if (-not (Get-VMSwitch -Name $SwitchName -ErrorAction SilentlyContinue)) {
     throw "vSwitch '$SwitchName' not found. Create one or pass -SwitchName."
   }
-  Info "prereqs OK — ${freeGB}GB free on $drive, ISO present, switch '$SwitchName'"
+  Info "prereqs OK -- ${freeGB}GB free on $drive, ISO present, switch '$SwitchName'"
 }
 
 # ---- 2. stage injection payload --------------------------------------------
@@ -130,7 +131,7 @@ function New-BaseVhdx {
   Get-File $ConvertImageUrl $converter 'Convert-WindowsImage.ps1'
   . $converter   # dot-source to expose the Convert-WindowsImage function
   $unattend = Join-Path $scriptDir 'AutoUnattend.xml'
-  Info "converting ISO -> VHDX (edition '$Edition', ${DiskGB}GB dynamic UEFI) — 30-60 min; -Verbose + a 30s heartbeat prove it is alive ..."
+  Info "converting ISO -> VHDX (edition '$Edition', ${DiskGB}GB dynamic UEFI) -- 30-60 min; -Verbose + a 30s heartbeat prove it is alive ..."
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $hb = Start-Heartbeat 'converting ISO -> VHDX'
   try {
@@ -188,7 +189,7 @@ function Wait-Provisioning {
   # remounting the VHDX between checks would fight the running VM, so instead we
   # SSH-probe: the guest's OpenSSH comes up mid-provisioning, and the completion
   # file is readable over SSH once written. Fall back to a fixed wait if SSH
-  # never answers (headless host with no key path) — see README troubleshooting.
+  # never answers (headless host with no key path) -- see README troubleshooting.
   Info "starting VM; waiting up to ${ProvisioningTimeoutMin}min for provisioning ..."
   Start-VM -Name $VmName
   $deadline = (Get-Date).AddMinutes($ProvisioningTimeoutMin)
@@ -207,7 +208,7 @@ function Wait-Provisioning {
         -o ConnectTimeout=5 "Administrator@$ip" `
         'if (Test-Path C:\provisioning-complete.txt) { "DONE" } elseif (Test-Path C:\provisioning-failed.txt) { "FAILED" } else { "WAIT" }' 2>$null
       if ($probe -match 'DONE')   { Info "provisioning complete (elapsed $elapsed)"; return $ip }
-      if ($probe -match 'FAILED') { throw 'guest provisioning failed — see C:\provisioning\first-boot.log inside the VM' }
+      if ($probe -match 'FAILED') { throw 'guest provisioning failed -- see C:\provisioning\first-boot.log inside the VM' }
     }
     Info "provisioning... elapsed $elapsed ($(if ($ip) { "guest $ip, installing/oobe" } else { 'waiting for guest IP' }))"
   } while ((Get-Date) -lt $deadline)
