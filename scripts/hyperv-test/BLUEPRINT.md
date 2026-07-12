@@ -157,6 +157,13 @@ The path substitution differs: 66d used the Sandbox mapped-folder
 `/mnt/c/Users/WDAGUtilityAccount/Desktop/staging`; 66h uses a fixed guest path
 `C:\AgentControlTest\staging` (WSL sees `/mnt/c/AgentControlTest/staging`).
 
+The lifted wsl-flow was also hardened (66j) to run on an older inbox `wsl.exe`
+(e.g. the WinDev2407Eval base): a `Step-UpdateWsl` runs `wsl --update` first so
+`--no-distribution` + `WSL_UTF8` are understood, `Step-InstallKernel` /
+`Step-InstallDistro` are idempotent (skip when the base snapshot already
+provides them), and `Invoke-Wsl` decodes UTF-16LE output from a pre-update
+`wsl.exe`.
+
 ---
 
 ## 5. Integration with `verify-pair-flow.mjs` (no duplication)

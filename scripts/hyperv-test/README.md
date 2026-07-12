@@ -196,6 +196,12 @@ inputs into the guest, run the reused 66d step functions in-guest via
 `Invoke-Command`, `Copy-Item -FromSession` `result.json` + screenshots back, then
 `Stop-VM`. Grades `result.json` for the pass/fail exit code.
 
+The wsl-flow is idempotent and self-updating: it runs `wsl --update` before any
+install (so an older inbox `wsl.exe` learns `--no-distribution` + `WSL_UTF8`),
+skips the kernel/distro installs when the base snapshot already provides them,
+and decodes UTF-16LE output from a pre-update `wsl.exe` so step details stay
+readable.
+
 **PowerShell Direct execs over the VMBus, not the network**, so nothing needs
 network setup anywhere: no OpenSSH server in the guest, no port-22 firewall rule,
 no guest-IP discovery, and no WSL2 -> guest routing. This is what makes the

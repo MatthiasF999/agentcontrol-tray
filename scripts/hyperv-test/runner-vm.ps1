@@ -76,11 +76,26 @@ function Add-Step {
   }
 }
 
+function Repair-WslText {
+  # Older wsl.exe ignores WSL_UTF8 and emits UTF-16LE; PowerShell then decodes
+  # those bytes with the console codepage, leaving every other byte as U+0000
+  # (and a leading FF FE BOM as U+FFFD). Genuine wsl text never contains U+0000,
+  # so an embedded null reliably flags mangled UTF-16LE: strip the null padding
+  # and BOM artifact to recover the ASCII text. Modern wsl.exe honours WSL_UTF8
+  # -> clean UTF-8 -> no nulls -> the string is returned unchanged.
+  param([string]$Text)
+  if ($Text -and $Text.IndexOf("`0") -ge 0) {
+    return $Text.Replace("`0", '').Replace([string][char]0xFFFD, '')
+  }
+  return $Text
+}
+
 function Invoke-Wsl {
-  <# Run wsl.exe with $WslArgs; capture merged stdout/stderr + exit code. #>
+  <# Run wsl.exe with $WslArgs; capture merged stdout/stderr + exit code.
+     Repairs UTF-16LE output from older wsl.exe that ignores the WSL_UTF8 hint. #>
   param([Parameter(Mandatory)][string[]]$WslArgs)
   $text = (& wsl.exe @WslArgs 2>&1 | Out-String)
-  return [pscustomobject]@{ Code = $LASTEXITCODE; Text = $text }
+  return [pscustomobject]@{ Code = $LASTEXITCODE; Text = (Repair-WslText $text) }
 }
 
 function Wait-For {
@@ -184,7 +199,26 @@ function Step-VerifyHost {
   Add-Step 'verify-host' 'pass' "$caption build $build" (Save-Screenshot 'host-info')
 }
 
+function Step-UpdateWsl {
+  # wsl --update refreshes the inbox wsl.exe to a modern build that understands
+  # --no-distribution and honours WSL_UTF8. Silent-succeed when already current.
+  # Blocks until the download finishes (30-60s on a stale box); no extra timeout
+  # needed since Invoke-Wsl waits on wsl.exe rather than polling.
+  $r = Invoke-Wsl @('--update')
+  $shot = Save-Screenshot 'wsl-update'
+  if ($r.Code -ne 0 -and $r.Text -notmatch 'already the latest version|already installed') {
+    throw "wsl --update failed ($($r.Code)): $($r.Text.Trim())"
+  }
+  Add-Step 'update-wsl' 'pass' 'wsl --update (or already latest)' $shot
+}
+
 function Step-InstallKernel {
+  # Skip when a working kernel is already present (our base snapshot ships one).
+  $s = Invoke-Wsl @('--status')
+  if ($s.Code -eq 0 -and $s.Text -match 'Default Version' -and $s.Text -notmatch 'kernel file is not found|--update') {
+    Add-Step 'install-kernel' 'pass' 'kernel already present (base snapshot)' (Save-Screenshot 'kernel-preinstalled')
+    return
+  }
   $r = Invoke-Wsl @('--install', '--no-distribution', '--no-launch')
   $shot = Save-Screenshot 'kernel-install'
   if ($r.Code -ne 0) { throw "wsl --install --no-distribution failed ($($r.Code)): $($r.Text.Trim())" }
@@ -202,6 +236,12 @@ function Step-WaitKernel {
 }
 
 function Step-InstallDistro {
+  # Skip when the distro is already registered (our base snapshot ships it).
+  $l = Invoke-Wsl @('--list', '--quiet')
+  if ($l.Code -eq 0 -and (($l.Text -split "\r?\n" | ForEach-Object { $_.Trim() }) -contains $Distro)) {
+    Add-Step 'install-distro' 'pass' "$Distro already present (base snapshot)" (Save-Screenshot 'distro-preinstalled')
+    return
+  }
   $r = Invoke-Wsl @('--install', '-d', $Distro, '--no-launch')
   $shot = Save-Screenshot 'distro-install'
   if ($r.Code -ne 0) { throw "wsl --install -d $Distro failed ($($r.Code)): $($r.Text.Trim())" }
@@ -278,7 +318,7 @@ function Invoke-TrayFlow {
 }
 
 function Invoke-WslFlow {
-  Step-VerifyHost; Step-InstallKernel; Step-WaitKernel
+  Step-VerifyHost; Step-UpdateWsl; Step-InstallKernel; Step-WaitKernel
   Step-InstallDistro; Step-WaitDistro
   Step-InstallBridge; Step-VerifyBridge; Step-VerifyPairFlow
 }
