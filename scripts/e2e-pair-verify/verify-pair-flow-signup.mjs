@@ -37,8 +37,13 @@
  *
  * Three paths (env `SPA_SIGNUP_PATHS`, default `signin,signup,otp`):
  *   signin — seeded existing user (TEST_EMAIL).
- *   signup — fresh throwaway `signup-<ts>@<SIGNUP_DOMAIN>` (closed-signup gate's
- *            bootstrap domain); the created user is deleted in a finally block.
+ *   signup — fresh throwaway `signup-<ts>@<SIGNUP_DOMAIN>`. The deployment is
+ *            invite-only (Phase 51 closed-signup gate: the SPA calls
+ *            `request_signup` before `signInWithOtp`, and an uninvited email is
+ *            rejected — so the SPA never issues the OTP request). We therefore
+ *            pre-create the user's `auth.users` shell via the admin API first
+ *            (what `request_signup`/`invite_to_org` do for an allowed email), so
+ *            the gate admits it; the created user is deleted in a finally block.
  *   otp    — enters the 6-digit code in the SPA's NEW in-tab OTP input (added in
  *            a sibling PR). Feature-detected: records `skip` when that input is
  *            not present in the deployed SPA, so it never falsely fails.
@@ -163,6 +168,24 @@ export async function mintCallbackLink(supabaseUrl, serviceRole, email, appUrl, 
     emailOtp: props?.email_otp ?? body?.email_otp ?? null,
     userId: body?.user?.id ?? body?.id ?? props?.user_id ?? null,
   };
+}
+
+/**
+ * Pre-create the `auth.users` shell for a fresh email via the admin API, so the
+ * SPA's closed-signup gate (`request_signup`, Phase 51) admits it and the SPA
+ * proceeds to `signInWithOtp`. Without this, `request_signup` raises "Signup not
+ * allowed — invitation required" for an uninvited email, the SPA swallows it as
+ * `ClosedSignupError` and NEVER issues `POST /auth/v1/otp` — which surfaces as
+ * the "issued no /auth/v1/otp request" failure. Admin-creating the user is
+ * exactly what `request_signup` / `invite_to_org` do for an allowed email, so
+ * the gate then returns `{status:"existing"}`. Returns the created user id.
+ */
+export async function precreateUser(supabaseUrl, serviceRole, email, fetchImpl) {
+  const body = await adminFetch(
+    supabaseUrl, serviceRole, 'POST', '/auth/v1/admin/users',
+    { email, email_confirm: true }, fetchImpl,
+  );
+  return body?.id ?? body?.user?.id ?? null;
 }
 
 /** Delete a user via the admin API; swallow errors (best-effort teardown). */
@@ -302,9 +325,15 @@ export async function runSignupVerification({
   supabaseUrl, serviceRole, appUrl, seededEmail, signupDomain = DEFAULT_SIGNUP_DOMAIN,
   paths = ['signin', 'signup', 'otp'], label = 'e2e-signup', screenshotDir = 'output',
   navTimeoutMs = 30_000, bridgeUrl, bridgePollTimeoutMs = 30_000, bridgePollStepMs = 3_000,
-  fetchImpl, mintImpl, deleteImpl, launchImpl,
+  fetchImpl, mintImpl, deleteImpl, precreateImpl, launchImpl,
 }) {
   const launch = launchImpl ?? launchBrowser;
+  // Real precreate needs admin creds; when they're absent (unit tests inject a
+  // fake browser + mint) it's a no-op so the mint's userId still drives cleanup.
+  const precreate = precreateImpl
+    ?? (supabaseUrl && serviceRole
+      ? (e) => precreateUser(supabaseUrl, serviceRole, e, fetchImpl ?? fetch)
+      : async () => null);
   const browser = await launch();
   const results = [];
   try {
@@ -312,9 +341,13 @@ export async function runSignupVerification({
       const mode = p === 'otp' ? 'otp' : 'link';
       const fresh = p === 'signup';
       const email = fresh ? `signup-${Date.now()}-${Math.floor(Math.random() * 1e4)}@${signupDomain}` : seededEmail;
-      const page = await browser.newPage();
       let rec;
+      let preCreatedId = null;
       try {
+        // Closed-signup gate: admit the fresh email BEFORE the SPA form runs, or
+        // request_signup rejects it and no /auth/v1/otp request is ever issued.
+        if (fresh) preCreatedId = await precreate(email);
+        const page = await browser.newPage();
         rec = await runPath({
           page, mode, email, appUrl, claimCode: randomClaim(), label: `${label}-${p}`,
           screenshotDir, navTimeoutMs, bridgeUrl, bridgePollTimeoutMs, bridgePollStepMs,
@@ -325,8 +358,9 @@ export async function runSignupVerification({
       } catch (e) {
         rec = { path: mode, name: p, status: 'fail', email: redact(email), error: e instanceof Error ? e.message : String(e) };
       } finally {
-        if (fresh && rec?.userId) {
-          await (deleteImpl ?? ((id) => deleteUser(supabaseUrl, serviceRole, id, fetchImpl ?? fetch)))(rec.userId);
+        const cleanupId = rec?.userId ?? preCreatedId;
+        if (fresh && cleanupId) {
+          await (deleteImpl ?? ((id) => deleteUser(supabaseUrl, serviceRole, id, fetchImpl ?? fetch)))(cleanupId);
         }
       }
       results.push(rec);

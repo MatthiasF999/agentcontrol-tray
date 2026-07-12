@@ -138,12 +138,53 @@ test('signup path deletes its throwaway user in the finally block', async () => 
   const deleted = [];
   const { pass, paths } = await runSignupVerification({
     appUrl: APP, seededEmail: 'seed@agentcontrol.dev', paths: ['signup'],
-    launchImpl, mintImpl: mintOk, deleteImpl: async (id) => deleted.push(id),
+    launchImpl, mintImpl: mintOk, precreateImpl: async () => 'pre-123',
+    deleteImpl: async (id) => deleted.push(id),
   });
   assert.equal(pass, true);
   assert.equal(paths[0].status, 'pass');
   assert.deepEqual(deleted, ['user-123'], 'the created signup user must be torn down');
   assert.match(paths[0].email, /signup-\d+/, 'signup path uses a fresh throwaway email');
+});
+
+test('signup path pre-creates the throwaway user BEFORE the form (closed-signup gate)', async () => {
+  const { launchImpl, calls } = fakeBrowser({ settleUrl: settlePair() });
+  const precreated = [];
+  const { pass, paths } = await runSignupVerification({
+    appUrl: APP, seededEmail: 'seed@agentcontrol.dev', paths: ['signup'],
+    launchImpl, mintImpl: mintOk,
+    precreateImpl: async (email) => { precreated.push(email); return 'pre-123'; },
+    deleteImpl: async () => {},
+  });
+  assert.equal(pass, true);
+  assert.equal(paths[0].status, 'pass');
+  assert.equal(precreated.length, 1, 'signup admits the email via one admin pre-create');
+  assert.match(precreated[0], /signup-\d+.*@/, 'pre-creates the fresh signup email');
+  // Only after admitting the email does the SPA form run.
+  assert.ok(calls.filled.some(([s]) => s.includes('pair-email-input')));
+});
+
+test('signin path does NOT pre-create a user (only signup needs the gate primed)', async () => {
+  const { launchImpl } = fakeBrowser({ settleUrl: settlePair() });
+  const precreated = [];
+  await runSignupVerification({
+    appUrl: APP, seededEmail: 'seed@agentcontrol.dev', paths: ['signin'],
+    launchImpl, mintImpl: mintOk, precreateImpl: async (e) => { precreated.push(e); return 'x'; },
+  });
+  assert.deepEqual(precreated, [], 'seeded existing user must not be pre-created');
+});
+
+test('signup path tears down the pre-created user even when the form is absent (skip)', async () => {
+  const { launchImpl } = fakeBrowser({ settleUrl: settlePair(), formPresent: false });
+  const deleted = [];
+  const { pass, paths } = await runSignupVerification({
+    appUrl: APP, seededEmail: 'seed@agentcontrol.dev', paths: ['signup'],
+    launchImpl, mintImpl: mintOk, precreateImpl: async () => 'pre-123',
+    deleteImpl: async (id) => deleted.push(id),
+  });
+  assert.equal(pass, true);
+  assert.equal(paths[0].status, 'skip');
+  assert.deepEqual(deleted, ['pre-123'], 'the pre-created user is cleaned up via the fallback id');
 });
 
 test('otp path SKIPS (not fails) when the in-tab OTP input is absent from the deployed SPA', async () => {
