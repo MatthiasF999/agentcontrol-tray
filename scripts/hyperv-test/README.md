@@ -155,6 +155,7 @@ pipeline as a scheduled quarterly job.
 | `gallery has no image named ...` | Microsoft renamed/removed the entry. Check the printed names; pass `-ImageName`, or pin `-DiskUri/-DiskSha256/-ArchiveEntry`. |
 | `downloaded zip sha256 != expected` | Truncated download or Microsoft rotated the image mid-fetch. Re-run (it re-downloads); if it persists, run `Update-DevVM.ps1` to pick up the new hash. |
 | `could not open a PowerShell Direct session` | MS changed the default credentials. Pass `-GuestUser` / `-GuestPassword`. Confirm the guest booted (open it in Hyper-V Manager). |
+| PowerShell Direct waits forever (guest is up + logged in) | Guest Service Interface integration service disabled (imported WinDev VHDX defaults it off). Enable it via `Enable-VMIntegrationService -VMName <vm> -Name 'Guest Service Interface'`, or just re-run `Import-DevVM.ps1` (the fix enables it automatically). |
 | `wsl --install -d ... failed` | Guest had no NAT internet. Supply an offline rootfs with `-UbuntuRootfsPath <host tar.gz>`. |
 | `slmgr /rearm` reports no rearms left | This image has been rearmed ~5 times — run `Update-DevVM.ps1` (or `Import-DevVM.ps1 -Force`) to pull a fresh image with a full rearm budget. |
 | WSL fails inside the guest | The **physical** host must expose VT-x/AMD-V and not itself block nested virt. |
