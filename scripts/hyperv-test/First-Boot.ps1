@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Runs ONCE inside the Phase 66h test VM at first auto-logon (invoked by the
   AutoUnattend.xml FirstLogonCommands). Turns a bare Windows 11 Enterprise Eval
@@ -8,7 +8,7 @@
   done so Build-BaseImage.ps1 (on the host) knows to snapshot.
 
   Idempotent: safe to re-run. Everything it needs was staged into
-  C:\provisioning by Build-BaseImage.ps1 (offline VHDX injection) —
+  C:\provisioning by Build-BaseImage.ps1 (offline VHDX injection) --
   wsl_update_x64.msi, ubuntu-jammy.tar.gz, host_id.pub.
 
 .NOTES
@@ -63,7 +63,7 @@ function Install-OpenSSHServer {
 
 function Set-AdminAuthorizedKey {
   # Admin accounts authenticate via administrators_authorized_keys, NOT the
-  # per-user ~/.ssh path. ACL must be SYSTEM + Administrators only, no inherit —
+  # per-user ~/.ssh path. ACL must be SYSTEM + Administrators only, no inherit --
   # sshd refuses the file otherwise.
   $akFile = Join-Path $env:ProgramData 'ssh\administrators_authorized_keys'
   Set-Content -Path $akFile -Value $pubKey -Encoding ascii -NoNewline
