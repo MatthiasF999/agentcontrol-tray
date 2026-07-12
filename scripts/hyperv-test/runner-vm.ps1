@@ -370,6 +370,65 @@ function Step-VerifyPairFlow {
   }
 }
 
+function Step-VerifyPairFlowSpa {
+  # Higher-value peer of Step-VerifyPairFlow: drives the SPA's OWN sign-in code
+  # path in headless Chromium (Playwright) via verify-pair-flow-signup.mjs, so a
+  # regression in the app's own redirect_to / stash / callback recovery — which
+  # the admin-forced HTTP verifier cannot see — fails the run. Records 'skip'
+  # (never 'fail') when pair-verify.env is absent OR Playwright can't be made
+  # available in the guest, so a machine without it still passes.
+  $envHost = Join-Path $StagingRoot 'pair-verify.env'
+  if (-not (Test-Path $envHost)) {
+    Add-Step 'verify-pair-flow-spa' 'skip' 'no staging\pair-verify.env (service_role key) present' (Save-Screenshot 'pairflow-spa-skip')
+    return
+  }
+  $outWsl = '/mnt/c/' + ($OutputRoot -replace '^[A-Za-z]:\\', '' -replace '\\', '/')
+  # Base64-encode the whole script (newlines/quotes survive PS->wsl.exe argv, see
+  # Step-InstallAndVerifyBridge). ESM `import 'playwright'` resolves node_modules
+  # from the mjs dir upward, so copy the three siblings into a NATIVE guest dir
+  # (not /mnt/c) and install playwright THERE before running.
+  $script = @'
+set -uo pipefail
+export PAIR_VERIFY_ENV='__ENV_WSL__'
+export SPA_SCREENSHOT_DIR='__OUT_WSL__'
+WORK=/root/spa-verify
+mkdir -p "$WORK"
+cp __STAGING_WSL__/verify-pair-flow.mjs __STAGING_WSL__/verify-pair-flow-spa.mjs __STAGING_WSL__/verify-pair-flow-signup.mjs "$WORK/"
+cd "$WORK"
+if ! node -e "require.resolve('playwright')" 2>/dev/null; then
+  echo "[test] playwright not resolvable in $WORK; attempting bounded test-time install"
+  [ -f package.json ] || npm init -y >/tmp/spa-pw-install.log 2>&1
+  if ! timeout 600 npm i playwright >>/tmp/spa-pw-install.log 2>&1; then
+    echo "SPA_SKIP: npm i playwright failed (see /tmp/spa-pw-install.log)"; tail -20 /tmp/spa-pw-install.log >&2; exit 3
+  fi
+  if ! timeout 600 npx --yes playwright install --with-deps chromium >>/tmp/spa-pw-install.log 2>&1; then
+    echo "SPA_SKIP: playwright install chromium failed (see /tmp/spa-pw-install.log)"; tail -20 /tmp/spa-pw-install.log >&2; exit 3
+  fi
+fi
+node verify-pair-flow-signup.mjs
+'@
+  $script = $script.Replace('__ENV_WSL__', "$StagingWsl/pair-verify.env").Replace('__OUT_WSL__', $outWsl).Replace('__STAGING_WSL__', $StagingWsl)
+  $b64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($script))
+  $r = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', "echo $b64 | base64 -d | bash")
+  $shot = Save-Screenshot 'pairflow-spa'
+  # The verifier prints one machine-readable line: SPAFLOW_JSON {...}.
+  $m = [regex]::Match($r.Text, 'SPAFLOW_JSON (\{.*\})')
+  if ($m.Success) {
+    [System.IO.File]::WriteAllText((Join-Path $OutputRoot 'pair-flow-signup.json'),
+      $m.Groups[1].Value, (New-Object System.Text.UTF8Encoding($false)))
+  }
+  if ($r.Code -eq 3) {
+    Add-Step 'verify-pair-flow-spa' 'skip' 'Playwright not available in guest (bounded test-time install failed)' $shot
+    return
+  }
+  if ($r.Code -eq 0) {
+    Add-Step 'verify-pair-flow-spa' 'pass' 'SPA sign-in code path drove the real form + recovery round-trip' $shot
+  } else {
+    Add-Step 'verify-pair-flow-spa' 'fail' "SPA pair-flow regression: $($r.Text.Trim())" $shot
+    throw 'verify-pair-flow-spa failed'
+  }
+}
+
 function Invoke-TrayFlow {
   Step-VerifySetup; Step-Launch; Step-DriveWizard
   Step-LaunchTray -Dir (Step-WaitInstalled)
@@ -377,7 +436,7 @@ function Invoke-TrayFlow {
 
 function Invoke-WslFlow {
   Step-VerifyHost; Step-UpdateWsl; Step-ImportDistro; Step-WaitDistro
-  Step-InstallAndVerifyBridge; Step-VerifyPairFlow
+  Step-InstallAndVerifyBridge; Step-VerifyPairFlow; Step-VerifyPairFlowSpa
 }
 
 # ---- run --------------------------------------------------------------------

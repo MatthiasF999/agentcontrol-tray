@@ -118,9 +118,13 @@ function Copy-Inputs {
   Copy-Item (Join-Path $scriptDir 'runner-vm.ps1')   (Join-Path $StageLocal 'runner-vm.ps1')
   Copy-Item (Join-Path $scriptDir 'helpers-vm.psm1') (Join-Path $StageLocal 'helpers-vm.psm1')
   if ($Flow -in 'wsl', 'full') {
-    # verify-pair-flow.mjs is the single source of truth in e2e-pair-verify - copy
-    # it into staging at run time, never duplicate it into the hyperv-test tree.
-    Copy-Item (Join-Path $scriptDir '..\e2e-pair-verify\verify-pair-flow.mjs') (Join-Path $StageLocal 'verify-pair-flow.mjs')
+    # verify-pair-flow*.mjs are the single source of truth in e2e-pair-verify -
+    # copy them into staging at run time, never duplicate into the hyperv-test
+    # tree. verify-pair-flow-signup.mjs imports from both siblings, so all three
+    # must land together for the SPA step's ESM imports to resolve.
+    Copy-Item (Join-Path $scriptDir '..\e2e-pair-verify\verify-pair-flow.mjs')        (Join-Path $StageLocal 'verify-pair-flow.mjs')
+    Copy-Item (Join-Path $scriptDir '..\e2e-pair-verify\verify-pair-flow-spa.mjs')    (Join-Path $StageLocal 'verify-pair-flow-spa.mjs')
+    Copy-Item (Join-Path $scriptDir '..\e2e-pair-verify\verify-pair-flow-signup.mjs') (Join-Path $StageLocal 'verify-pair-flow-signup.mjs')
     # service_role key: gitignored host file; present -> pair-flow runs, else skip.
     $envHost = Join-Path $scriptDir 'pair-verify.env'
     if (Test-Path $envHost) {

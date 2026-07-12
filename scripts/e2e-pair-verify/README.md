@@ -148,6 +148,63 @@ node scripts/e2e-pair-verify/verify-pair-flow-spa.mjs
   is available. A red SPA result with a green HTTP result localizes the bug to
   the SPA router, not GoTrue's allow-list.
 
+## SPA sign-in-driven verifier (`verify-pair-flow-signup.mjs`)
+
+Both verifiers above mint an admin magic-link whose `redirect_to` is **already**
+the pair-bridge callback (`buildRedirectTo` → `/pair-bridge/?claim_code=…`) and
+then follow it. They prove GoTrue honours an allow-listed redirect — but they
+**never run the SPA's own sign-in code**, the code that actually *decides*
+`redirect_to`. That is exactly where the 2026-07-11 dogfood bug lived: the tray
+opens `/pair-bridge/?claim_code=…`; the signed-out SPA stashes the claim in
+**sessionStorage** and shows an email form; submitting calls
+`signInWithOtp({ emailRedirectTo: AUTH_REDIRECT_URL })` where
+`AUTH_REDIRECT_URL = <origin>/auth/callback` — the claim is **not** in the URL,
+it rides in sessionStorage, and `AuthCallbackScreen` re-attaches it after auth.
+An admin-forced verifier skips that whole chain and stays green even when it
+breaks.
+
+`verify-pair-flow-signup.mjs` drives the **actual** flow in headless Chromium:
+
+1. `goto /pair-bridge/?claim_code=<rnd>` — the SPA stashes the claim.
+2. Types the email into the SPA's **own** form and submits, then **intercepts
+   the SPA's `POST /auth/v1/otp?redirect_to=…`** and asserts the `redirect_to`
+   the SPA built is same-origin + an allow-listed callback — the thing the
+   admin-forced tests can never observe.
+3. Completes the round-trip through the SPA's real recovery path
+   (`/auth/callback` → `AuthCallbackScreen` → sessionStorage re-attach) and
+   asserts the client-side URL settles on `/pair-bridge/` with the claim intact.
+
+Three paths (env `SPA_SIGNUP_PATHS`, default `signin,signup,otp`):
+
+- **signin** — the seeded existing user (`TEST_EMAIL`).
+- **signup** — a fresh throwaway `signup-<ts>@<SIGNUP_DOMAIN>` (the closed-signup
+  gate's bootstrap domain, default `agentcontrol.dev`); the created user is
+  **deleted in a `finally` block** via the admin API.
+- **otp** — enters the 6-digit code in the SPA's **new in-tab OTP input** (added
+  in a sibling PR). **Feature-detected**: records `skip` when that input is not
+  present in the deployed SPA, so it never falsely fails.
+
+It emits one machine-readable line (`SPAFLOW_JSON {"pass":true,"paths":[…]}`,
+exit `0`/`1`/`2`, same convention). Each path is independently `pass`/`skip`/
+`fail`; skips (offline build, missing OTP UI) keep the run green.
+
+```bash
+# same env as the SPA verifier, plus Playwright available on the machine:
+node scripts/e2e-pair-verify/verify-pair-flow-signup.mjs
+# or a subset: SPA_SIGNUP_PATHS=signin node …/verify-pair-flow-signup.mjs
+```
+
+### Hyper-V harness wiring
+
+`scripts/hyperv-test/runner-vm.ps1` runs it as `Step-VerifyPairFlowSpa`, a peer
+**after** `Step-VerifyPairFlow` in the `wsl`/`full` flows. The orchestrator
+(`hyperv-test-orchestrator.ps1`) stages all three `verify-pair-flow*.mjs`
+together (the signup verifier imports from the other two). The step copies them
+into a native guest dir, **best-effort installs Playwright + Chromium at
+test-time** (`npm i playwright && npx playwright install --with-deps chromium`,
+each bounded by `timeout 600`), and records **`skip`** when `pair-verify.env` is
+absent **or** Playwright can't be made available — so a guest without it passes.
+
 ### Service-role key handling
 
 The `service_role` JWT bypasses RLS — treat it like a root password.
