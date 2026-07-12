@@ -260,6 +260,51 @@ function Step-VerifyPairFlow {
   }
 }
 
+function Step-VerifyPairFlowSpa {
+  # SPA-level sibling of Step-VerifyPairFlow: drives the DEPLOYED app in a
+  # headless Chromium (Playwright) so a client-side routing regression (magic
+  # link consumed but AuthCallbackScreen fails to navigate back to
+  # /pair-bridge/, PR #41) is caught even when the HTTP-redirect check is green.
+  # Runs AFTER the HTTP verifier (higher-value, catches strictly more). Two skip
+  # gates, both non-fatal: (1) no staging\pair-verify.env service_role key,
+  # (2) Playwright/Chromium not present in the guest (it is a RUN-environment
+  # prereq, not installed at build time — see e2e-pair-verify/README.md).
+  $envHost = Join-Path $staging 'pair-verify.env'
+  if (-not (Test-Path $envHost)) {
+    Add-Step 'verify-pair-flow-spa' 'skip' 'no staging\pair-verify.env (service_role key) present' (Save-Screenshot 'pairflow-spa-skip')
+    return
+  }
+  # Probe for Playwright (full or -core) in the guest before attempting the run.
+  # Doubled single quotes are PowerShell's escape inside a single-quoted string.
+  $probe = 'node -e "Promise.any([import(''playwright''),import(''playwright-core'')]).then(()=>process.exit(0),()=>process.exit(9))"'
+  $pw = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $probe)
+  if ($pw.Code -ne 0) {
+    Add-Step 'verify-pair-flow-spa' 'skip' 'Playwright not installed in guest (RUN-env prereq — see e2e-pair-verify/README.md)' (Save-Screenshot 'pairflow-spa-skip')
+    return
+  }
+  $mjsWsl = '/mnt/c/Users/WDAGUtilityAccount/Desktop/staging/verify-pair-flow-spa.mjs'
+  $envWsl = '/mnt/c/Users/WDAGUtilityAccount/Desktop/staging/pair-verify.env'
+  # SPA_SCREENSHOT_DIR lands spa-*.png next to result.json (the WSL /mnt view of outputDir).
+  $outWsl = '/mnt/c/Users/WDAGUtilityAccount/Desktop/output'
+  $cmd = "export PAIR_VERIFY_ENV='$envWsl'; export SPA_SCREENSHOT_DIR='$outWsl'; node '$mjsWsl'"
+  $r = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $cmd)
+  $shot = Save-Screenshot 'pairflow-spa'
+
+  $m = [regex]::Match($r.Text, 'SPAFLOW_JSON (\{.*\})')
+  $finalUrl = ''
+  if ($m.Success) {
+    [System.IO.File]::WriteAllText((Join-Path $outputDir 'pair-flow-spa.json'),
+      $m.Groups[1].Value, (New-Object System.Text.UTF8Encoding($false)))
+    try { $finalUrl = ($m.Groups[1].Value | ConvertFrom-Json).finalUrl } catch {}
+  }
+  if ($r.Code -eq 0) {
+    Add-Step 'verify-pair-flow-spa' 'pass' "SPA client-side URL settled on pair-bridge: $finalUrl" $shot
+  } else {
+    Add-Step 'verify-pair-flow-spa' 'fail' "SPA pair-flow regression (final URL: $finalUrl): $($r.Text.Trim())" $shot
+    throw "verify-pair-flow-spa failed: $finalUrl"
+  }
+}
+
 # ---- run --------------------------------------------------------------------
 try {
   Step-VerifyHost
@@ -270,6 +315,7 @@ try {
   Step-InstallBridge
   Step-VerifyBridge
   Step-VerifyPairFlow
+  Step-VerifyPairFlowSpa
   $result.pass = $true
 } catch {
   $result.errors += $_.Exception.Message
