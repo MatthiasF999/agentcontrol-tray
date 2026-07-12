@@ -176,11 +176,15 @@ works on the old inbox `wsl.exe` (unlike `wsl --install --no-distribution`, whic
 that vintage does not support) and is idempotent per run — it short-circuits when
 the distro is already registered in the session.
 
-Before invoking `wsl.sh`, `Step-InstallBridge` preps the freshly-imported rootfs so
-its `systemctl --user` call has a D-Bus session: write `/etc/wsl.conf` (`systemd=true`)
-+ `wsl --terminate` to reboot into systemd, `loginctl enable-linger root`, and preset
-`XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS` — falling back to a `nohup node` start
-(picked up by `Step-VerifyBridge`'s pgrep path) if the user unit still fails.
+`wsl.sh`'s `systemctl --user` cannot work under `wsl.exe -u root -e bash -lc` (no
+interactive user D-Bus session; adding `loginctl enable-linger root` +
+`XDG_RUNTIME_DIR` does not create `/run/user/0/bus`). So `Step-InstallBridge` just
+runs `wsl.sh` and tolerates a non-zero exit at `[7/7]` — by then the bridge tarball
+is unpacked, `.env` is present and node is installed, which is the state the test
+cares about. On any non-zero exit it falls back to launching the unpacked bridge
+directly (`nohup node dist/index.js`), verified by `Step-VerifyBridge`'s pgrep path.
+Fixing the `systemctl --user` path properly is a `wsl.sh` product concern, not
+something the runner should hammer through.
 
 ---
 
