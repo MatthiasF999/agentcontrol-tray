@@ -37,7 +37,10 @@ operator-action.
 
 The tray app talks to **two** systems:
 
-1. **Local Bridge HTTP API** on `localhost:3001` (status, approve, config)
+1. **Local Bridge HTTP API** on `localhost:3001` (status, approve, config).
+   `3001` is the **canonical local-bridge port** — the tray hardcodes it and
+   the WSL installer pins `PORT=3001`. (The bridge's `.env.example` / `Dockerfile`
+   default to `3000`, which is the cloud/Docker port; don't conflate the two.)
 2. **Docker engine socket** (`/var/run/docker.sock` / npipe) to start/stop
    the Bridge container
 
