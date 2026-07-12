@@ -178,14 +178,18 @@ the distro is already registered in the session.
 
 `wsl.sh`'s `systemctl --user` cannot work under `wsl.exe -u root -e bash -lc` (no
 interactive user D-Bus session; adding `loginctl enable-linger root` +
-`XDG_RUNTIME_DIR` does not create `/run/user/0/bus`). So `Step-InstallBridge` just
-runs `wsl.sh` and tolerates a non-zero exit at `[7/7]` — by then the bridge tarball
-is unpacked, `.env` is present and node is installed, which is the state the test
-cares about. On any non-zero exit it falls back to launching the unpacked bridge
-directly (`nohup node dist/index.js`), verified by `Step-VerifyBridge`'s pgrep path.
-`Step-VerifyBridge` is pgrep-only (it no longer attempts `systemctl --user`, which is
-guaranteed to fail in our exec model) and retries pgrep up to 30s to survive WSL2
-auto-restart windows, tailing the bridge log + journal + dmesg on failure.
+`XDG_RUNTIME_DIR` does not create `/run/user/0/bus`). So `Step-InstallAndVerifyBridge`
+just runs `wsl.sh` and tolerates a non-zero exit at `[7/7]` — by then the bridge
+tarball is unpacked, `.env` is present and node is installed, which is the state the
+test cares about. It then launches the unpacked bridge directly
+(`nohup node dist/index.js`) and verifies by port (`ss -ltn | grep :3001`), retrying
+up to 30s. Install, start and verify all run inside a **single** `wsl.exe` invocation:
+a separate verify `wsl.exe` call let the WSL2 distro auto-shut-down between steps and
+boot fresh, killing the bridge started by the previous call (observed in PR #74/#75).
+Keeping them in one session keeps the distro alive throughout; port-based verify
+(`ss` / `curl :3001`) replaces the old pgrep check since a listening port is what
+actually proves the bridge is functional. It no longer attempts `systemctl --user`,
+which is guaranteed to fail in our exec model, and tails the bridge log on failure.
 Fixing the `systemctl --user` path properly is a `wsl.sh` product concern, not
 something the runner should hammer through.
 

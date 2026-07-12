@@ -281,55 +281,54 @@ function Step-WaitDistro {
   Add-Step 'wait-distro' 'pass' "$Distro present in wsl --list --quiet" $shot
 }
 
-function Step-InstallBridge {
-  # -u root bypasses the first-run NewUserPrompt; no default UNIX user exists yet.
-  # wsl.sh is expected to fail at [7/7] under `wsl.exe -u root -e bash -lc` because
-  # `systemctl --user` needs an interactive user D-Bus session that a raw exec
-  # doesn't provide. That's a product-level concern with wsl.sh; here we fall
-  # back to launching the freshly-unpacked bridge directly and let
-  # Step-VerifyBridge's pgrep path confirm it. Both paths succeed as long as the
-  # process is live.
-  $cmd = "curl -sSL $WslShUrl | bash"
-  $r = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $cmd)
-  $shot = Save-Screenshot 'bridge-install'
-  if ($r.Code -eq 0) {
-    Add-Step 'install-bridge' 'pass' "curl $WslShUrl | bash (root)" $shot
-    return
+function Step-InstallAndVerifyBridge {
+  # wsl.sh install + nohup start + port verify, all in ONE wsl.exe call, so the
+  # WSL2 distro stays alive throughout. Splitting install and verify into
+  # separate wsl.exe invocations caused the distro to auto-shut-down between
+  # them, killing the bridge process (see PR #74/#75 iterations). Verify by port
+  # (ss :3001) -- the bridge is functional as long as it is listening.
+  $script = @'
+set -uo pipefail
+curl -sSL __WSL_SH_URL__ | bash
+WSLSH_EXIT=$?
+if [ $WSLSH_EXIT -ne 0 ]; then
+  echo "[test] wsl.sh returned $WSLSH_EXIT; proceeding with manual bridge start" >&2
+fi
+if [ ! -f /root/agentcontrol-bridge/dist/index.js ]; then
+  echo "[test] /root/agentcontrol-bridge/dist/index.js missing after wsl.sh; abort" >&2
+  exit 1
+fi
+cd /root/agentcontrol-bridge
+nohup /usr/bin/env node dist/index.js > /tmp/agentcontrol-bridge.log 2>&1 &
+BRIDGE_PID=$!
+echo "[test] bridge spawn pid=$BRIDGE_PID"
+# Poll port 3001 up to 30s
+for i in $(seq 1 30); do
+  if ss -ltn 2>/dev/null | grep -q ':3001'; then
+    echo "[test] bridge listening on :3001 after ${i}s"
+    exit 0
+  fi
+  if ! kill -0 $BRIDGE_PID 2>/dev/null; then
+    echo "[test] bridge process (pid=$BRIDGE_PID) died before port opened" >&2
+    echo "----- bridge log tail -----" >&2
+    tail -80 /tmp/agentcontrol-bridge.log >&2
+    exit 1
+  fi
+  sleep 1
+done
+echo "[test] port 3001 never opened after 30s; bridge log tail:" >&2
+tail -80 /tmp/agentcontrol-bridge.log >&2
+exit 1
+'@
+  # Substitute the URL via explicit .Replace() (not PS string interpolation) to
+  # keep the here-string literal in bash.
+  $script = $script.Replace('__WSL_SH_URL__', $WslShUrl)
+  $r = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $script)
+  $shot = Save-Screenshot 'bridge-install-verify'
+  if ($r.Code -ne 0) {
+    throw "bridge install+verify failed ($($r.Code)):`n$($r.Text.Trim())"
   }
-  # Fallback: assume wsl.sh made it through [4/7] (bridge unpacked) or [5/7]
-  # (npm ci) before dying. Confirm bridge dir + dist entry exist, then launch.
-  # Single-line bash for reliable PS -> wsl.exe argv passing.
-  $manualCmd = 'test -f /root/agentcontrol-bridge/dist/index.js && (cd /root/agentcontrol-bridge && nohup /usr/bin/env node dist/index.js > /tmp/agentcontrol-bridge.log 2>&1 &) && sleep 2 && pgrep -af agentcontrol-bridge'
-  $fb = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $manualCmd)
-  if ($fb.Code -ne 0) {
-    throw "wsl.sh bridge install failed ($($r.Code)) and manual-start fallback failed ($($fb.Code)): $($r.Text.Trim())`n---fallback---`n$($fb.Text.Trim())"
-  }
-  Add-Step 'install-bridge' 'warn' "wsl.sh non-zero; started bridge via nohup fallback (pid detected via pgrep)" $shot
-}
-
-function Step-VerifyBridge {
-  # Skip `systemctl --user` -- it's guaranteed to fail under `wsl.exe -u root -e
-  # bash -lc` (no interactive user D-Bus session; see PR #73 / BLUEPRINT). Poll
-  # pgrep for the bridge process, retrying to survive WSL2 auto-restart windows.
-  $shot = Save-Screenshot 'bridge-status'
-  $found = $false
-  $pgOut = ''
-  for ($i = 0; $i -lt 6; $i++) {
-    $pg = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', 'pgrep -af agentcontrol-bridge')
-    if ($pg.Code -eq 0 -and $pg.Text.Trim()) {
-      $found = $true
-      $pgOut = $pg.Text.Trim()
-      break
-    }
-    Start-Sleep -Seconds 5
-  }
-  if ($found) {
-    Add-Step 'verify-bridge' 'warn' "process live via pgrep: $pgOut" $shot
-    return
-  }
-  # Collect diagnostics for the throw
-  $logTail = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', 'tail -80 /tmp/agentcontrol-bridge.log 2>/dev/null; echo "---journalctl---"; journalctl -n 40 -u agentcontrol-bridge --no-pager 2>/dev/null; echo "---dmesg tail---"; dmesg 2>/dev/null | tail -20')
-  throw "agentcontrol-bridge not running after 30s of retries. Diagnostics:`n$($logTail.Text.Trim())"
+  Add-Step 'install-and-verify-bridge' 'pass' 'wsl.sh + node dist/index.js listening on :3001 (single wsl session)' $shot
 }
 
 function Step-VerifyPairFlow {
@@ -369,7 +368,7 @@ function Invoke-TrayFlow {
 
 function Invoke-WslFlow {
   Step-VerifyHost; Step-UpdateWsl; Step-ImportDistro; Step-WaitDistro
-  Step-InstallBridge; Step-VerifyBridge; Step-VerifyPairFlow
+  Step-InstallAndVerifyBridge; Step-VerifyPairFlow
 }
 
 # ---- run --------------------------------------------------------------------
