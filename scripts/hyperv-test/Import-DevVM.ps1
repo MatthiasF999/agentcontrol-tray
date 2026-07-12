@@ -56,10 +56,14 @@ param(
   # and the Ubuntu dev user. Default reads the host Ubuntu WSL key.
   [string]$HostPubKeyPath = '\\wsl$\Ubuntu\home\dev\.ssh\id_ed25519.pub',
   [string]$Distro       = 'Ubuntu-22.04',
-  # Optional offline Ubuntu rootfs tarball on the HOST. If given it is copied
-  # into the guest and `wsl --import`ed; otherwise the guest runs `wsl --install
-  # -d <Distro>` over its NAT network (Default Switch).
+  # Ubuntu rootfs tarball on the HOST, copied into the guest and `wsl --import`ed.
+  # Left empty it is auto-downloaded from $UbuntuRootfsUrl and cached in $WorkDir
+  # (see Get-UbuntuRootfs). Set it to pin a pre-placed tarball on air-gapped hosts.
   [string]$UbuntuRootfsPath = '',
+  # Canonical Ubuntu 22.04 (jammy) WSL rootfs, published by Canonical. Used to
+  # auto-download when -UbuntuRootfsPath is empty so no in-guest store download
+  # (`wsl --install -d`) is ever needed -- that path fails on the offline MS eval image.
+  [string]$UbuntuRootfsUrl = 'https://cloud-images.ubuntu.com/wsl/jammy/current/ubuntu-jammy-wsl-amd64-wsl.rootfs.tar.gz',
   [string]$DevPassword  = 'AgentControl!Test1',
   # MS dev VM auto-logon account. Its password has historically been blank; some
   # builds used 'Passw0rd!'. PowerShell Direct needs the guest credential, so we
@@ -104,6 +108,28 @@ function Test-Prereqs {
   $freeGB = [math]::Round((Get-PSDrive $drive).Free / 1GB, 1)
   if ($freeGB -lt 40) { throw "need >= 40GB free on $drive`: only ${freeGB}GB" }
   Info "prereqs OK -- ${freeGB}GB free on $drive, switch '$SwitchName', host pubkey present"
+}
+
+# ---- 1b. auto-download the Ubuntu WSL rootfs (host-side, cached) ------------
+# We always `wsl --import` a rootfs tarball inside the guest rather than let it
+# `wsl --install -d` from the MS Store: the WinDev eval image has no Store creds /
+# route, so --install (which internally --imports) dies with a bare "-1". Fetch
+# Canonical's canonical jammy WSL rootfs on the HOST (which does have network) and
+# hand it to the guest. Idempotent: a cached file > 100MB is reused as-is.
+function Get-UbuntuRootfs {
+  $dest = Join-Path $WorkDir 'ubuntu-jammy-wsl.rootfs.tar.gz'
+  if ((Test-Path $dest) -and -not $Force) {
+    $sizeMB = [math]::Round((Get-Item $dest).Length / 1MB, 1)
+    if ($sizeMB -gt 100) { Info "cached Ubuntu rootfs OK (${sizeMB}MB) -> $dest"; return $dest }
+    Warn "cached Ubuntu rootfs looks truncated (${sizeMB}MB); re-downloading"
+  }
+  Info "downloading Ubuntu 22.04 WSL rootfs from $UbuntuRootfsUrl ..."
+  $old = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+  try { Invoke-WebRequest -Uri $UbuntuRootfsUrl -OutFile $dest -UseBasicParsing } finally { $ProgressPreference = $old }
+  $sizeMB = [math]::Round((Get-Item $dest).Length / 1MB, 1)
+  if ($sizeMB -lt 100) { throw "downloaded Ubuntu rootfs is only ${sizeMB}MB (expected > 100MB); download likely failed" }
+  Info "Ubuntu rootfs downloaded (${sizeMB}MB) -> $dest"
+  return $dest
 }
 
 # ---- 2. resolve the gallery image (URI + sha256 + in-zip vhdx path) --------
@@ -279,15 +305,13 @@ function Connect-GuestSession {
 function Invoke-GuestProvisioning {
   param($Session)
   $pubKey = (Get-Content -Raw $HostPubKeyPath).Trim()
-  if ($UbuntuRootfsPath) {
-    if (-not (Test-Path $UbuntuRootfsPath)) { throw "UbuntuRootfsPath not found: $UbuntuRootfsPath" }
-    Info "copying Ubuntu rootfs into guest ..."
-    Invoke-Command -Session $Session -ScriptBlock { New-Item -ItemType Directory -Force -Path 'C:\provisioning' | Out-Null }
-    Copy-Item -ToSession $Session -Path $UbuntuRootfsPath -Destination 'C:\provisioning\ubuntu-rootfs.tar.gz' -Force
-  }
+  if (-not (Test-Path $UbuntuRootfsPath)) { throw "UbuntuRootfsPath not found: $UbuntuRootfsPath" }
+  Info "copying Ubuntu rootfs into guest ..."
+  Invoke-Command -Session $Session -ScriptBlock { New-Item -ItemType Directory -Force -Path 'C:\provisioning' | Out-Null }
+  Copy-Item -ToSession $Session -Path $UbuntuRootfsPath -Destination 'C:\provisioning\ubuntu-rootfs.tar.gz' -Force
   Info 'provisioning guest (OpenSSH + key + WSL/Ubuntu + rearm) over PowerShell Direct ...'
-  Invoke-Command -Session $Session -ArgumentList $pubKey, $Distro, $DevPassword, [bool]$UbuntuRootfsPath, $SkipRearm.IsPresent -ScriptBlock {
-    param($PubKey, $Distro, $DevPassword, $HaveRootfs, $SkipRearm)
+  Invoke-Command -Session $Session -ArgumentList $pubKey, $Distro, $DevPassword, $SkipRearm.IsPresent -ScriptBlock {
+    param($PubKey, $Distro, $DevPassword, $SkipRearm)
     $ErrorActionPreference = 'Stop'
     function GLog { param($m) Write-Host "[guest] $m" }
 
@@ -314,19 +338,18 @@ function Invoke-GuestProvisioning {
     GLog 'OpenSSH server + administrators_authorized_keys ready'
 
     # WSL: the dev image already has the platform enabled and has rebooted since
-    # capture, so no feature-enable/reboot dance -- import or install in one shot.
+    # capture, so no feature-enable/reboot dance -- import the host-supplied rootfs
+    # in one shot. We never `wsl --install -d` (Store download) here: the offline MS
+    # eval image has no Store route and it fails with a bare "-1".
     $env:WSL_UTF8 = '1'
     & wsl.exe --set-default-version 2 | Out-Null
+    $rootfs = 'C:\provisioning\ubuntu-rootfs.tar.gz'
+    if (-not (Test-Path $rootfs)) { throw "Ubuntu rootfs not staged at $rootfs -- host copy step did not run" }
     $have = (& wsl.exe --list --quiet) -split "\r?\n" | ForEach-Object { $_.Trim() }
     if ($have -notcontains $Distro) {
-      if ($HaveRootfs) {
-        New-Item -ItemType Directory -Force -Path "C:\WSL\$Distro" | Out-Null
-        & wsl.exe --import $Distro "C:\WSL\$Distro" 'C:\provisioning\ubuntu-rootfs.tar.gz' --version 2
-        if ($LASTEXITCODE -ne 0) { throw "wsl --import $Distro failed ($LASTEXITCODE)" }
-      } else {
-        & wsl.exe --install -d $Distro --no-launch
-        if ($LASTEXITCODE -ne 0) { throw "wsl --install -d $Distro failed ($LASTEXITCODE) -- pass -UbuntuRootfsPath for an offline import" }
-      }
+      New-Item -ItemType Directory -Force -Path "C:\WSL\$Distro" | Out-Null
+      & wsl.exe --import $Distro "C:\WSL\$Distro" $rootfs --version 2
+      if ($LASTEXITCODE -ne 0) { throw "wsl --import $Distro failed ($LASTEXITCODE)" }
       GLog "$Distro registered"
     } else { GLog "$Distro already present" }
     & wsl.exe --set-default $Distro | Out-Null
@@ -405,6 +428,9 @@ Expand-Vhdx -Zip $zip -Entry $entry
 # dev image's blank-password 'User' account in (see Prepare-WinDevVhdx).
 Prepare-WinDevVhdx -VhdxPath $vhdxPath
 New-DevVm
+# Ensure a rootfs tarball is on the host before we provision: auto-download the
+# canonical Ubuntu jammy WSL rootfs unless the caller pinned one (air-gapped hosts).
+if (-not $UbuntuRootfsPath) { $UbuntuRootfsPath = Get-UbuntuRootfs }
 $session = Connect-GuestSession
 try { Invoke-GuestProvisioning -Session $session } finally { Remove-PSSession $session -ErrorAction SilentlyContinue }
 Complete-Base
