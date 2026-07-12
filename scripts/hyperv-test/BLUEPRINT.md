@@ -29,23 +29,19 @@ The host's WSL is irrelevant — no `wsl --shutdown`, Claude's session survives.
 
 | Layer | Detail |
 |---|---|
-| Host | Windows 11 + Hyper-V; Claude Code in host Ubuntu WSL drives via `powershell.exe` |
-| Control plane | WSL bash → `powershell.exe -c` → Hyper-V PowerShell module → managed VM |
+| Host | Windows 11 + Hyper-V; driven from an **elevated host PowerShell** (a thin `.sh` wrapper lets host WSL call it) |
+| Control plane | `hyperv-test-orchestrator.ps1` -> Hyper-V module (Restore/Start/Stop-VM) + **PowerShell Direct** -> guest |
 | Guest VM | Windows 11, 16 GB disk (dynamic VHDX), 8 GB RAM, 4 vCPU, **nested-virt ON** |
-| Guest contents | WSL2 kernel + `Ubuntu-22.04` pre-provisioned + Windows **OpenSSH server** |
-| Data channel | SSH (WSL host → VM) over a **Hyper-V Internal switch** (static host-only IP) |
+| Guest contents | WSL2 kernel + `Ubuntu-22.04` pre-provisioned (OpenSSH is provisioned but the harness no longer uses it) |
+| Data channel | **PowerShell Direct (VMBus)** host -> guest: no network, no SSH, no switch, no guest IP |
 | Reset model | `Restore-VMSnapshot clean-agentcontrol-base` before every run |
 
 ```mermaid
 flowchart LR
   subgraph HOST["Windows 11 host"]
-    subgraph HWSL["host Ubuntu WSL (Claude Code)"]
-      ORCH["hyperv-test-orchestrator.sh"]
-    end
-    PS["powershell.exe\nHyper-V module"]
-    SW(["Internal vSwitch\nAgentControl-Test\n172.31.0.1/24"])
+    ORCH["hyperv-test-orchestrator.ps1\n(elevated PowerShell)"]
+    PS["Hyper-V module\nRestore/Start/Stop-VM"]
     subgraph VM["Win11 guest VM (nested-virt ON)"]
-      SSHD["OpenSSH server\n172.31.0.10:22"]
       RUN["runner-vm.ps1"]
       subgraph GWSL["guest WSL2"]
         UB["Ubuntu-22.04\n+ bridge + verify-pair-flow.mjs"]
@@ -54,9 +50,7 @@ flowchart LR
     end
   end
   ORCH -->|Restore/Start/Stop-VM| PS --> VM
-  ORCH -->|scp / ssh| SSHD
-  SSHD --> RUN
-  SW --- SSHD
+  ORCH -->|"PS Direct (VMBus): New-PSSession / Copy-Item / Invoke-Command"| RUN
 ```
 
 ---

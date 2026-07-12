@@ -187,11 +187,43 @@ Download the ISO from the
 to `C:\Hyper-V\AgentControlTest\Win11-Enterprise-Eval.iso`, then run
 `pwsh -File scripts\hyperv-test\Build-BaseImage-FromIso.ps1`.
 
+## Per-run orchestrator
+
+`hyperv-test-orchestrator.ps1` (host-side, elevated) + `runner-vm.ps1`
+(guest-side): revert to `clean-agentcontrol-base`, boot, open a **PowerShell
+Direct** session (`New-PSSession -VMName`), `Copy-Item -ToSession` the staged
+inputs into the guest, run the reused 66d step functions in-guest via
+`Invoke-Command`, `Copy-Item -FromSession` `result.json` + screenshots back, then
+`Stop-VM`. Grades `result.json` for the pass/fail exit code.
+
+**PowerShell Direct execs over the VMBus, not the network**, so nothing needs
+network setup anywhere: no OpenSSH server in the guest, no port-22 firewall rule,
+no guest-IP discovery, and no WSL2 -> guest routing. This is what makes the
+harness portable to any Windows host with Hyper-V. It also sidesteps the reason
+the old SSH path was flaky: WSL2 cannot reach a Hyper-V Default-Switch guest at
+all (vSwitch isolation, [WSL #4288](https://github.com/microsoft/WSL/issues/4288)
+/ [#11494](https://github.com/microsoft/WSL/issues/11494)).
+
+`hyperv-test-orchestrator.sh` is a thin WSL wrapper that just translates flags
+(and any POSIX `--local` path) and shells out to the `.ps1` via `powershell.exe`.
+
+```powershell
+# From an elevated PowerShell on the host:
+pwsh -File scripts\hyperv-test\hyperv-test-orchestrator.ps1              # wsl flow
+pwsh -File scripts\hyperv-test\hyperv-test-orchestrator.ps1 -Flow full   # both flows
+pwsh -File scripts\hyperv-test\hyperv-test-orchestrator.ps1 -Local .\setup.exe -KeepVmRunning
+```
+
+```bash
+# Or from WSL (wrapper shells out to powershell.exe):
+./hyperv-test-orchestrator.sh --flow full
+```
+
+> `Import-DevVM.ps1` still provisions an OpenSSH server in the guest, but the
+> orchestrator no longer uses it. It is retained only for possible future test
+> flows; dropping it is a separate follow-up.
+
 ## What's next
 
-- **Per-run orchestrator** — `hyperv-test-orchestrator.sh` + `runner-vm.ps1`:
-  revert to `clean-agentcontrol-base`, boot, discover the guest IP, `scp` inputs,
-  run the reused 66d step functions over SSH (as `User@<ip>`), collect
-  `result.json`.
 - **Phase 66i** — CI automation: cache the extracted VHDX, run
   `Update-DevVM.ps1 -CheckOnly` quarterly, rebuild + re-snapshot on drift.
