@@ -173,6 +173,9 @@ function New-InjectionPayload {
   }
   Copy-Item $HostPubKeyPath (Join-Path $stageDir 'host_id.pub') -Force
   Copy-Item (Join-Path $scriptDir 'First-Boot.ps1') $stageDir -Force
+  # MSI is best-effort -- First-Boot.ps1 falls back to native `wsl --install`
+  # on Win11 25H2+ where the standalone kernel MSI is deprecated. Still staged
+  # for Win10/older-Win11 compatibility.
   Get-File $WslKernelUrl   (Join-Path $stageDir 'wsl_update_x64.msi') 'WSL2 kernel MSI'
   Get-File $UbuntuRootfsUrl (Join-Path $stageDir 'ubuntu-jammy.tar.gz') 'Ubuntu-22.04 rootfs'
   Info "injection payload staged in $stageDir"

@@ -36,7 +36,9 @@ function Log { param([string]$m)
 $pubKeyPath = Join-Path $ProvisioningDir 'host_id.pub'
 $kernelMsi  = Join-Path $ProvisioningDir 'wsl_update_x64.msi'
 $rootfsTar  = Join-Path $ProvisioningDir 'ubuntu-jammy.tar.gz'
-foreach ($f in @($pubKeyPath, $kernelMsi, $rootfsTar)) {
+# kernelMsi is best-effort (Win10/older-Win11 only); Install-WslKernel falls
+# back to native `wsl --install` on Win11 25H2+ where the MSI is deprecated.
+foreach ($f in @($pubKeyPath, $rootfsTar)) {
   if (-not (Test-Path $f)) { throw "missing injected artifact: $f" }
 }
 $pubKey = (Get-Content -Raw $pubKeyPath).Trim()
@@ -89,10 +91,24 @@ function Install-WslKernel {
       Log "enabled optional feature $feat"
     }
   }
-  $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @(
-    '/i', "`"$kernelMsi`"", '/quiet', '/norestart')
-  if ($p.ExitCode -notin @(0, 3010)) {
-    throw "wsl_update_x64.msi install failed (exit $($p.ExitCode))"
+  # Win11 25H2+ ships WSL as a built-in Store app; the standalone
+  # wsl_update_x64.msi is deprecated + fails with 1603. Try the MSI first for
+  # older Win10/11 builds; on failure, fall back to native `wsl --install`.
+  $msiOk = $false
+  if (Test-Path $kernelMsi) {
+    $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @(
+      '/i', "`"$kernelMsi`"", '/quiet', '/norestart')
+    if ($p.ExitCode -in @(0, 3010)) {
+      $msiOk = $true
+      Log "WSL2 kernel installed via MSI (exit $($p.ExitCode))"
+    } else {
+      Log "wsl_update_x64.msi failed exit $($p.ExitCode); falling back to native 'wsl --install'"
+    }
+  }
+  if (-not $msiOk) {
+    # Native path (Win11 25H2+): wsl --install --no-distribution --no-launch
+    & wsl.exe --install --no-distribution --no-launch 2>&1 | ForEach-Object { Log "wsl --install: $_" }
+    if ($LASTEXITCODE -ne 0) { throw "wsl --install failed (exit $LASTEXITCODE)" }
   }
   & wsl.exe --set-default-version 2 | Out-Null
   Log "WSL2 kernel installed; default version = 2"
