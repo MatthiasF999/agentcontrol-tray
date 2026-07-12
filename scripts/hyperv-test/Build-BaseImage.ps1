@@ -78,6 +78,29 @@ function Stop-Heartbeat {
   if ($Job) { $Job | Stop-Job -EA SilentlyContinue; $Job | Remove-Job -Force -EA SilentlyContinue }
 }
 
+# Validate the answer file BEFORE the 30-60 min ISO->VHDX conversion so a
+# malformed or mis-placed setting fails in seconds -- not after a booted guest
+# rejects unattend.xml deep in the specialize pass.
+function Test-Unattend {
+  param([string]$Path)
+  if (-not (Test-Path $Path)) { throw "AutoUnattend.xml not found at $Path" }
+  $doc = New-Object System.Xml.XmlDocument
+  try { $doc.Load($Path) }   # .Load reads the file directly: BOM- and encoding-safe
+  catch { throw "AutoUnattend.xml is not well-formed XML: $($_.Exception.Message)" }
+
+  $ns = New-Object System.Xml.XmlNamespaceManager $doc.NameTable
+  $ns.AddNamespace('u', 'urn:schemas-microsoft-com:unattend')
+  # RunSynchronous is a child of Microsoft-Windows-Deployment, never Shell-Setup;
+  # mis-placing it makes Setup reject the whole specialize pass with
+  # "A component or setting specified in the answer file does not exist."
+  $bad = $doc.SelectNodes(
+    "//u:component[@name='Microsoft-Windows-Shell-Setup']/u:RunSynchronous", $ns)
+  if ($bad.Count -gt 0) {
+    throw 'AutoUnattend.xml: RunSynchronous is under Shell-Setup; it belongs to the Microsoft-Windows-Deployment component'
+  }
+  Info 'AutoUnattend.xml validated (well-formed; RunSynchronous placement OK)'
+}
+
 # ---- 1. prereqs -------------------------------------------------------------
 function Test-Prereqs {
   $admin = ([Security.Principal.WindowsPrincipal] `
@@ -137,6 +160,7 @@ function New-BaseVhdx {
   Get-File $ConvertImageUrl $converter 'Convert-WindowsImage.ps1'
   . $converter   # dot-source to expose the Convert-WindowsImage function
   $unattend = Join-Path $scriptDir 'AutoUnattend.xml'
+  Test-Unattend $unattend   # fail fast on a bad answer file, before the long conversion
   Info "converting ISO -> VHDX (edition '$Edition', ${DiskGB}GB dynamic UEFI) -- 30-60 min; -Verbose + a 30s heartbeat prove it is alive ..."
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $hb = Start-Heartbeat 'converting ISO -> VHDX'
