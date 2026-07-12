@@ -1,27 +1,36 @@
-# Hyper-V VM test harness — base image build (Phase 66h.1)
+# Hyper-V VM test harness — base image build (Phase 66j)
 
 A **persistent Windows 11 Hyper-V VM with nested virtualization** that can run
 the full WSL-inclusive installer / pairing test **without touching the host's
 own WSL** — the flaw that blocks the Windows-Sandbox approach (Phase 66d). See
-[`BLUEPRINT.md`](./BLUEPRINT.md) for the full architecture and the four sub-PRs.
+[`BLUEPRINT.md`](./BLUEPRINT.md) for the full architecture.
 
-This PR (**66h.1**) is the **one-time base-image builder**. It converts a
-Windows 11 Enterprise evaluation ISO into a ready-to-clone Hyper-V guest with
-WSL2 + Ubuntu-22.04 + OpenSSH pre-installed, then snapshots it as
-`clean-agentcontrol-base`. Later PRs (66h.2–.4) add the per-run orchestrator that
-reverts to that snapshot before every test.
+This PR (**66j**) replaces the base-image builder. Instead of building from a raw
+Windows 11 evaluation ISO (fragile: OOBE, AutoLogon, and reboot-race bugs), it
+imports **Microsoft's pre-built "Windows 11 dev environment"** image and
+provisions it **host-side over PowerShell Direct** — no in-guest first-boot
+script, no OOBE, no AutoLogon, no reboots. Setup drops from ~90 min to ~10-20 min
+(most of which is the one-time image download).
 
-> Nothing here runs the actual test yet, and **the scripts have not been executed
-> against a live host** (they need a Windows host with Hyper-V). This PR lands the
-> build tooling; first smoke is the user running `Build-BaseImage.ps1`.
+> The scripts have **not been executed against a live host** (they need a Windows
+> host with Hyper-V). This PR lands the build tooling; first smoke is the user
+> running `Import-DevVM.ps1`.
+
+## Two paths
+
+| Path | Script | Status | When |
+|------|--------|--------|------|
+| **Microsoft dev VM (gallery)** | `Import-DevVM.ps1` | ✅ **Recommended** | Default. Pre-built, WSL2 already on, no OOBE. |
+| Build from eval ISO | `Build-BaseImage-FromIso.ps1` | ⚠️ Deprecated | Only if you need a licensed key or a current 25H2 build the gallery image doesn't offer. |
 
 ## Files
 
 | File | Runs on | Purpose |
 |------|---------|---------|
-| `Build-BaseImage.ps1` | Windows host (elevated) | One-time: ISO → VHDX → VM → provision → snapshot. |
-| `AutoUnattend.xml` | (baked into VHDX) | Zero-touch Windows setup: skip OOBE, auto-login, launch `First-Boot.ps1`. |
-| `First-Boot.ps1` | inside the VM (first logon) | Install OpenSSH + WSL2 kernel + Ubuntu-22.04 + `dev` user; write `provisioning-complete.txt`. |
+| `Import-DevVM.ps1` | Windows host (elevated) | **Primary.** Resolve gallery image → download+verify → extract VHDX → create VM → provision over PowerShell Direct → `slmgr /rearm` → snapshot. |
+| `Update-DevVM.ps1` | Windows host (elevated) | Quarterly refresh: refetch the gallery, hash-diff, rebuild only if Microsoft published a newer image. Cron-able (Phase 66i). |
+| `Build-BaseImage-FromIso.ps1` | Windows host (elevated) | Deprecated ISO + AutoUnattend flow, kept for reference. |
+| `AutoUnattend.xml`, `First-Boot.ps1` | (ISO flow only) | Consumed by `Build-BaseImage-FromIso.ps1`. |
 | `README.md` | — | This file. |
 
 ## Prerequisites
@@ -29,127 +38,152 @@ reverts to that snapshot before every test.
 - **Windows 11 Pro / Enterprise / Education** host (Home has no Hyper-V).
 - **Hyper-V feature enabled** — from an elevated PowerShell:
   `Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -All`, then reboot.
-- **Run elevated** (admin) — Hyper-V cmdlets, VHDX mount, and ACLs require it.
-- **≥ 40 GB free** at the work dir (`C:\Hyper-V\AgentControlTest` by default).
+- **Run elevated** (admin) — Hyper-V cmdlets, VHDX extraction, and PowerShell
+  Direct all require it.
+- **≥ 40 GB free** at the work dir (`C:\Hyper-V\AgentControlTest` by default) —
+  the compressed image plus the extracted VHDX.
 - **A host SSH keypair** — `\\wsl$\Ubuntu\home\dev\.ssh\id_ed25519.pub` by
   default (generate with `ssh-keygen -t ed25519` if absent). Its **public** key
   is baked into the guest for both the Windows admin and the Ubuntu `dev` user.
-- **Internet access** on the host — the builder downloads
-  `Convert-WindowsImage.ps1`, the WSL2 kernel MSI, and the Ubuntu rootfs once.
+- **Internet access** on the host — downloads the gallery image + (by default)
+  the Ubuntu distro inside the guest.
 
-## Step 1 — download the Windows 11 evaluation ISO (user action)
+---
 
-Microsoft no longer ships ready-made developer VHDX images, so the base is built
-from the free 90-day evaluation ISO:
+## Using the Microsoft Dev VM
 
-1. Go to the [Windows 11 Enterprise evaluation center](https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise).
-2. Download the **ISO – Enterprise** (English, x64).
-3. Save it to **`C:\Hyper-V\AgentControlTest\Win11-Enterprise-Eval.iso`**
-   (or anywhere, and pass `-IsoPath`).
+Microsoft **discontinued the standalone developer-VHDX download** (the old
+`developer.microsoft.com/.../virtual-machines` page now redirects to a page with
+no VMs). The only surviving pre-built dev VM is the one the **Hyper-V Quick
+Create gallery** serves — and, crucially, its backing disk is reachable by a
+plain URL, so `Import-DevVM.ps1` fetches it **without the Quick Create GUI**:
 
-## Step 2 — build the base image
+1. It downloads the public gallery manifest
+   (`https://go.microsoft.com/fwlink/?linkid=851584`).
+2. Finds the `Windows 11 dev environment` entry and reads its `disk.uri` +
+   sha256.
+3. Downloads that `.zip` (cached + hash-verified), extracts the `.vhdx`, and
+   builds the VM.
+
+As of 2026 the gallery serves **`WinDev2407Eval`** — a **July-2024 / 22H2**
+Enterprise **Evaluation** build. Two consequences you should know:
+
+- It is **not 25H2** (Microsoft no longer publishes a newer pre-built image).
+- Its 90-day evaluation **has already expired**, so `Import-DevVM.ps1` runs
+  **`slmgr /rearm`** during provisioning (then reboots so it takes effect). That
+  resets the clock to ~90 days, so **every reverted snapshot boots licensed**.
+  Rearms are finite (~5 per image); run `Update-DevVM.ps1` quarterly to pick up
+  a fresh image from Microsoft when the hash changes.
+
+### Step 1 — run the import
 
 From an **elevated** PowerShell:
 
 ```powershell
-pwsh -File scripts\hyperv-test\Build-BaseImage.ps1
+pwsh -File scripts\hyperv-test\Import-DevVM.ps1
 ```
 
-The script is idempotent — re-running reuses an existing VHDX / VM / snapshot.
+Idempotent — re-running reuses the cached zip / extracted VHDX / VM / snapshot.
 Pass `-Force` to rebuild from scratch.
 
-**Time budget: ~90 min for the first build** (ISO→VHDX ~10–20 min, unattended
-Windows setup ~10–15 min, WSL + Ubuntu provisioning ~10–15 min, plus the one-time
-downloads). Subsequent runs that reuse artifacts are far faster.
+**Time budget: ~10-20 min** (dominated by the one-time ~10-20 GB image
+download; VM create + PowerShell Direct provisioning is a few minutes).
 
 ### What it does
 
-1. Verify prereqs (admin, Hyper-V, disk, ISO, vSwitch).
-2. Stage the injection payload (host pubkey, `First-Boot.ps1`, WSL2 kernel MSI,
-   Ubuntu rootfs) into `…\inject`.
-3. Convert the ISO to a dynamic UEFI VHDX with `AutoUnattend.xml` baked in
-   (offline WIM apply — no TPM/SecureBoot setup gate).
-4. Mount the VHDX and copy the payload to `C:\provisioning` inside it.
-5. Create a **Generation 2** VM (`agentcontrol-test-vm`): 8 GB **static** RAM,
-   4 vCPU, **nested virtualization on**
-   (`Set-VMProcessor -ExposeVirtualizationExtensions $true`), vTPM + Secure Boot,
-   VHDX + ISO attached, on the **Default Switch**.
-6. Start it; `AutoUnattend.xml` auto-logs-in and runs `First-Boot.ps1`, which
-   installs OpenSSH (key auth), the WSL2 kernel, imports Ubuntu-22.04, creates
-   the `dev` user, and writes `C:\provisioning-complete.txt`.
-7. The host polls over SSH until that file appears, detaches the ISO, shuts the
-   guest down cleanly, and takes the `clean-agentcontrol-base` snapshot.
+1. Verify prereqs (admin, Hyper-V, switch, disk, host pubkey).
+2. Resolve the gallery image → disk URI + sha256 + in-zip VHDX name.
+3. Download the zip (skip if cached + hash matches), **verify sha256**, extract
+   the VHDX, clear its mark-of-the-web.
+4. Create a **Generation 2** VM (`agentcontrol-test-vm`): 8 GB **static** RAM, 4
+   vCPU, **nested virtualization on**, vTPM + Secure Boot, on the **Default
+   Switch** (NAT + DHCP).
+5. Start it; the MS image auto-logs-in as `User` — so provisioning runs from the
+   **host** over PowerShell Direct (`New-PSSession -VMName`), no guest network
+   needed: install OpenSSH (key auth via `administrators_authorized_keys`),
+   ensure `Ubuntu-22.04` (via `wsl --install -d`, or an offline
+   `-UbuntuRootfsPath` import), create the `dev` user, then `slmgr /rearm`.
+6. Reboot the guest so the rearm applies, shut down cleanly, take the
+   `clean-agentcontrol-base` snapshot, and record the imported image hash to
+   `devvm\imported-image.json`.
 
 ### Key parameters (defaults)
 
 | Param | Default | Notes |
 |-------|---------|-------|
-| `-IsoPath` | `C:\Hyper-V\AgentControlTest\Win11-Enterprise-Eval.iso` | The eval ISO you downloaded. |
-| `-WorkDir` | `C:\Hyper-V\AgentControlTest` | VHDX + downloads + injection staging. |
+| `-WorkDir` | `C:\Hyper-V\AgentControlTest` | Image cache + extracted VHDX under `devvm\`. |
 | `-VmName` | `agentcontrol-test-vm` | Hyper-V VM name. |
-| `-SwitchName` | `Default Switch` | Any existing vSwitch (Default Switch = NAT + DHCP). |
+| `-SwitchName` | `Default Switch` | NAT + DHCP; guest IP is dynamic (orchestrator discovers it). |
 | `-SnapshotName` | `clean-agentcontrol-base` | The golden snapshot the orchestrator reverts to. |
-| `-Edition` | `Windows 11 Enterprise Evaluation` | WIM edition applied. |
+| `-ImageName` | `Windows 11 dev environment` | Gallery entry to import. |
+| `-DiskUri` / `-DiskSha256` / `-ArchiveEntry` | *(from gallery)* | Pin/override the image (offline / reproducible builds). |
 | `-HostPubKeyPath` | `\\wsl$\Ubuntu\home\dev\.ssh\id_ed25519.pub` | Baked into guest (admin + `dev`). |
-| `-MemoryGB` / `-CpuCount` / `-DiskGB` | `8` / `4` / `64` | Static RAM (nested-virt), vCPU, max dynamic disk. |
-| `-ProvisioningTimeoutMin` | `40` | Cap on the first-boot provisioning wait. |
-| `-Force` | *(off)* | Rebuild VHDX/VM/snapshot even if present. |
+| `-Distro` | `Ubuntu-22.04` | WSL distro provisioned in the guest. |
+| `-UbuntuRootfsPath` | *(empty)* | Offline: a host rootfs tarball to `wsl --import` instead of `wsl --install -d`. |
+| `-GuestUser` / `-GuestPassword` | `User` / *(auto)* | MS dev-VM logon. Password is tried blank then `Passw0rd!`; override if MS changed it. |
+| `-SkipRearm` | *(off)* | Skip `slmgr /rearm` + its reboot (e.g. a still-valid image). |
+| `-Force` | *(off)* | Rebuild even if zip/VHDX/VM/snapshot exist. |
 
-**Documented credentials** (throwaway eval VM, host-only network; SSH key is the
-real access path):
+**Documented credentials** (throwaway VM; SSH key is the real access path):
 
-- Windows admin `Administrator` / `AgentControl!Test1`
-- Ubuntu `dev` / `AgentControl!Test1` (passwordless sudo)
+- Windows admin `User` (Microsoft's default; blank password).
+- Ubuntu `dev` / `AgentControl!Test1` (passwordless sudo).
 
-## Troubleshooting
+### Quarterly refresh — `Update-DevVM.ps1`
 
-### Watching provisioning progress (Basic vs Enhanced Session Mode)
+The gallery image is an evaluation build that Microsoft replaces periodically
+under the same entry (only the URI + hash change). `Update-DevVM.ps1` refetches
+the manifest and compares the current disk hash to the one recorded at the last
+import:
 
-Hyper-V Manager's VMConnect has TWO connection modes:
+```powershell
+pwsh -File scripts\hyperv-test\Update-DevVM.ps1            # rebuild only if the hash moved
+pwsh -File scripts\hyperv-test\Update-DevVM.ps1 -CheckOnly # report drift, exit 2, never rebuild (CI gate)
+```
 
-- **Enhanced Session Mode (ESM)** — default. Uses an RDP-like wrapper that shows
-  its own guest-credentials dialog BEFORE connecting. Even when AutoLogon has
-  successfully logged the guest into Windows, ESM's own credential prompt makes
-  it LOOK like AutoLogon failed. This is a false alarm.
+A no-op until the hash actually changes; on change it delegates the full rebuild
+to `Import-DevVM.ps1 -Force`. Phase 66i wires the `-CheckOnly` form into the
+pipeline as a scheduled quarterly job.
 
-- **Basic Session Mode** — raw video output. Shows what Windows is actually
-  displaying. AutoLogon events are visible here.
-
-**To watch AutoLogon + First-Boot.ps1 progress**: in VMConnect, switch off ESM:
-`View menu → Enhanced Session → uncheck` (or press `Ctrl+Alt+End`). Reconnect.
-You should see Windows boot → auto-login as Administrator → First-Boot.ps1
-PowerShell console pops up.
-
-**If Basic Session Mode ALSO lands on a login screen**, THEN AutoLogon is truly
-broken — apply the "Manual login on first boot" step below.
+### Troubleshooting (dev VM)
 
 | Symptom | Likely cause / fix |
 |---------|--------------------|
 | `must run elevated` | Start PowerShell as Administrator. |
 | `Hyper-V feature not enabled` | Enable it (see Prereqs) and reboot. |
-| `Win11 eval ISO not found` | Download it to the default path or pass `-IsoPath`. |
-| `Convert-WindowsImage did not produce a VHDX` | Wrong `-Edition` string — list editions with `Get-WindowsImage -ImagePath <mounted>\sources\install.wim`; eval media is usually `Windows 11 Enterprise Evaluation`. |
-| `need >= 40GB free` | Free space or point `-WorkDir` at a bigger drive. |
-| **VM lands at the login screen instead of auto-logging in** | AutoLogon in `AutoUnattend.xml` is broken. On Windows 11 26200 the usual cause is a `SkipMachineOOBE`/`SkipUserOOBE` in the OOBE block (both are deprecated and short-circuit the OOBE machine that writes the AutoAdminLogon registry values *and* registers FirstLogonCommands, so AutoLogon **and** First-Boot.ps1 both silently fail). Remove them and rely on the `Hide*` settings. Second cause: the built-in `Administrator` configured via `<LocalAccount>` (name collision) instead of `<AdministratorPassword>`, so the AutoLogon password ends up out of sync. `Build-BaseImage.ps1`'s `Test-Unattend` now fails fast on a missing AutoLogon/FirstLogonCommands and warns on `Skip*OOBE`. **On Win11 25H2+ AutoLogon can be ignored even with a valid answer file** (Microsoft is deprecating password AutoLogon in favour of Passkeys / Windows Hello) -- see the dedicated row below; this is a known limitation, not a build bug. |
-| **Win11 25H2+ (build 26200): one manual login on first boot** *(second troubleshooting step — only after the Basic-vs-ESM check above)* | **First rule out Enhanced Session Mode** (see "Watching provisioning progress" above): a login screen under ESM is usually a false alarm and AutoLogon actually worked. Only if **Basic Session Mode ALSO** lands on a login screen is AutoLogon genuinely broken. In that real-failure case the VM may sit at the login screen despite a valid `<AutoLogon>` block. This needs **one** manual step, once, on the first base-image build: (1) open `agentcontrol-test-vm` in **Hyper-V Manager** (Connect, in Basic Session Mode); (2) at the login screen click **Administrator**; (3) type the password `AgentControl!Test1` and press Enter. `First-Boot.ps1` then fires automatically via `FirstLogonCommands`, provisioning runs to completion, and the builder's SSH poll picks it up from there. The builder detects this case: once the guest has an IP but sshd stays silent past `-ManualLoginHintMin` minutes (default 10) it prints a one-time hint with these exact steps. After this build the base snapshot is captured, so per-run orchestrator reverts never hit the login screen again. |
-| **First-Boot log shows `wsl_update_x64.msi install failed (exit 1603)`** | Win11 25H2 (build 26200) ships WSL as a built-in Store app; the standalone `wsl_update_x64.msi` is deprecated and its MSI install fails with 1603. **No action needed** -- `First-Boot.ps1` automatically falls back to native `wsl --install --no-distribution --no-launch` and continues. If that native path **also** fails, log into the guest and run `wsl --status` manually, then confirm the `Microsoft-Windows-Subsystem-Linux` and `VirtualMachinePlatform` Windows features are enabled (`Get-WindowsOptionalFeature -Online -FeatureName <name>`). |
-| **First-Boot log ends at `wsl --import Ubuntu-22.04 failed (-1)`** | On Win11 25H2+ enabling the `Microsoft-Windows-Subsystem-Linux` / `VirtualMachinePlatform` features reports `RestartRequired=Possible`; the WSL kernel stays inert until the box reboots, so `wsl --import` fails with `-1` if it runs in the same session. **No action needed** -- `First-Boot.ps1` now detects the pending restart, registers an `AgentControlFirstBootPhase2` AtLogon scheduled task, reboots, and resumes automatically after the next AutoLogon (a registry marker `HKLM\SOFTWARE\AgentControl\FirstBootPhase` prevents an infinite reboot loop). If manual recovery is ever needed: run `Restart-Computer` in the VM, then re-invoke `powershell -ExecutionPolicy Bypass -File C:\provisioning\First-Boot.ps1` manually. |
-| Provisioning never completes / SSH never answers | Open the VM in Hyper-V Manager, log in (`Administrator` / password above), read `C:\provisioning\first-boot.log`. Common causes: no host pubkey, download blocked, nested-virt not actually available on the physical host. |
-| `guest provisioning failed` | `C:\provisioning-failed.txt` + `first-boot.log` inside the VM have the error. |
-| WSL fails inside the guest | The **physical** host must expose VT-x/AMD-V and not itself block nesting; confirm the host isn't a VM that disallows nested virt. |
-| Wrong SSH host key on rebuild | The guest IP is DHCP; clear the stale entry with `ssh-keygen -R <ip>` (or the builder's `StrictHostKeyChecking=no` handles it). |
+| `vSwitch 'Default Switch' not found` | Create a switch or pass `-SwitchName`. |
+| `gallery has no image named ...` | Microsoft renamed/removed the entry. Check the printed names; pass `-ImageName`, or pin `-DiskUri/-DiskSha256/-ArchiveEntry`. |
+| `downloaded zip sha256 != expected` | Truncated download or Microsoft rotated the image mid-fetch. Re-run (it re-downloads); if it persists, run `Update-DevVM.ps1` to pick up the new hash. |
+| `could not open a PowerShell Direct session` | MS changed the default credentials. Pass `-GuestUser` / `-GuestPassword`. Confirm the guest booted (open it in Hyper-V Manager). |
+| `wsl --install -d ... failed` | Guest had no NAT internet. Supply an offline rootfs with `-UbuntuRootfsPath <host tar.gz>`. |
+| `slmgr /rearm` reports no rearms left | This image has been rearmed ~5 times — run `Update-DevVM.ps1` (or `Import-DevVM.ps1 -Force`) to pull a fresh image with a full rearm budget. |
+| WSL fails inside the guest | The **physical** host must expose VT-x/AMD-V and not itself block nested virt. |
 
-## The 90-day clock
+---
 
-The evaluation edition is a **90-day** license. When it expires, rebuild the base
-from a fresh eval ISO (`-Force`), or re-arm inside the guest with `slmgr /rearm`
-(a few times), or supply a licensed key in `AutoUnattend.xml`. For a nightly /
-pre-release gate this quarterly rebuild is acceptable (see BLUEPRINT §7).
+## Legacy: build from ISO (deprecated)
+
+`Build-BaseImage-FromIso.ps1` is the original Phase 66h flow: it converts a
+Windows 11 Enterprise 90-day evaluation ISO into the base image via
+`Convert-WindowsImage` + an `AutoUnattend.xml` + an in-guest `First-Boot.ps1`.
+It is **deprecated** — `Import-DevVM.ps1` is simpler and less fragile — but kept
+for the case where you need a **licensed key** or a **current 25H2 build** the
+gallery image doesn't offer.
+
+If you use it, the ISO route's failure modes (Win11 25H2 ignoring unattend
+AutoLogon and parking at the login screen, deprecated `Skip*OOBE`, the
+`wsl_update_x64.msi` 1603 fallback, and the WSL-feature reboot-and-resume race)
+are documented inline in `Build-BaseImage-FromIso.ps1` and `First-Boot.ps1`.
+Download the ISO from the
+[Windows 11 Enterprise evaluation center](https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise)
+to `C:\Hyper-V\AgentControlTest\Win11-Enterprise-Eval.iso`, then run
+`pwsh -File scripts\hyperv-test\Build-BaseImage-FromIso.ps1`.
 
 ## What's next
 
-- **66h.2** — `hyperv-test-orchestrator.sh` + `runner-vm.ps1`: revert to
-  `clean-agentcontrol-base`, boot, `scp` inputs, run the reused 66d step
-  functions over SSH, collect `result.json`.
-- **66h.3** — wire `verify-pair-flow.mjs` reuse + `pair-verify.env.example`.
-- **66h.4** — `PHASE-66H-SUMMARY.md` + build-once/run-many runbook.
+- **Per-run orchestrator** — `hyperv-test-orchestrator.sh` + `runner-vm.ps1`:
+  revert to `clean-agentcontrol-base`, boot, discover the guest IP, `scp` inputs,
+  run the reused 66d step functions over SSH (as `User@<ip>`), collect
+  `result.json`.
+- **Phase 66i** — CI automation: cache the extracted VHDX, run
+  `Update-DevVM.ps1 -CheckOnly` quarterly, rebuild + re-snapshot on drift.

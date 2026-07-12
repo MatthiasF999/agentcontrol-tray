@@ -61,48 +61,62 @@ flowchart LR
 
 ---
 
-## 2. VM base image construction (one-time) — `Build-BaseImage.ps1`
+## 2. VM base image construction (one-time) — `Import-DevVM.ps1`
 
-### 2.1 Windows 11 source — **recommendation: ISO + AutoUnattend**
+> **Phase 66j pivot.** The base image is now **imported from Microsoft's
+> pre-built "Windows 11 dev environment" gallery image** via `Import-DevVM.ps1`,
+> not built from a raw ISO. The ISO + AutoUnattend flow
+> (`Build-BaseImage-FromIso.ps1`) is retained but **deprecated** — it proved
+> fragile (Win11 25H2 ignoring unattend AutoLogon, deprecated `Skip*OOBE`, WSL
+> MSI 1603, reboot-and-resume races). §2.1–§2.2 below are updated accordingly.
 
-Microsoft **no longer publishes ready-made developer VHDX images** (the old
-"Windows dev VM" downloads are
-[discontinued](https://learn.microsoft.com/en-us/answers/questions/2259075/windows-developer-vm-or-images-where-are-they-now)).
-The only supported free source is the
-[Windows 11 Enterprise **90-day evaluation ISO**](https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise).
+### 2.1 Windows 11 source — **recommendation: MS dev VM (gallery)**
+
+Microsoft **no longer publishes the standalone developer VHDX download** (the old
+`developer.microsoft.com/.../virtual-machines` page
+[redirects](https://learn.microsoft.com/en-us/answers/questions/2259075/windows-developer-vm-or-images-where-are-they-now)
+to a page with no VMs). **But** the same pre-built image still ships through the
+**Hyper-V Quick Create gallery**, and — contrary to the earlier assumption here —
+it is **fully scriptable without the GUI**: the public gallery manifest
+(`https://go.microsoft.com/fwlink/?linkid=851584`) lists each image's `disk.uri`
++ sha256, so `Import-DevVM.ps1` downloads and verifies the disk directly.
 
 | Option | Verdict |
 |---|---|
-| **Eval ISO + `Convert-WindowsImage` + AutoUnattend.xml** | ✅ **Recommended** — fully scriptable, no manual OOBE, reproducible |
-| Ready-made Microsoft VHDX | ❌ Discontinued — not available |
-| VHLK VHDX | ❌ Hardware-cert only, wrong workload |
-| Hyper-V Quick Create | ⚠️ Interactive OOBE, not scriptable — dev bootstrap only |
+| **MS dev VM via gallery `disk.uri`** (`Import-DevVM.ps1`) | ✅ **Recommended** — pre-provisioned (no OOBE/AutoLogon), WSL2 already on, fully scriptable |
+| Eval ISO + `Convert-WindowsImage` + AutoUnattend.xml | ⚠️ Deprecated fallback — works, but fragile; use only for a licensed key or a current 25H2 build |
+| Ready-made Microsoft VHDX (standalone download) | ❌ Discontinued — not available |
+| Hyper-V Quick Create **GUI** | ⚠️ Interactive — but its *gallery `disk.uri`* is what we script above |
 
-`Convert-WindowsImage.ps1` turns the ISO's `install.wim` into a bootable VHDX and
-bakes in an `AutoUnattend.xml` so first boot reaches the desktop with **no
-interaction** (auto-login test user, skip OOBE/privacy prompts). See
-[Convert-WindowsImage](https://deepwiki.com/MicrosoftDocs/Virtualization-Documentation/5.4-convert-windowsimage-and-vm-tools)
-and [AutoUnattend for Win11](https://www.deploymentresearch.com/back-to-basics-using-an-autounattend-xml-file-to-automate-windows-11-setup-from-media/).
+As of 2026 the gallery serves **`WinDev2407Eval`** (July-2024 / 22H2 Enterprise
+Evaluation). It is **not 25H2** and its 90-day eval **has expired**, so
+`Import-DevVM.ps1` runs `slmgr /rearm` (+ reboot) so every reverted snapshot
+boots licensed; `Update-DevVM.ps1` picks up a fresher image quarterly when the
+gallery hash moves. See the sha256 + entry pinned in the README.
 
-### 2.2 `Build-BaseImage.ps1` design
+### 2.2 `Import-DevVM.ps1` design
 
-Idempotent, run once on the host (elevated). Produces VM `AgentControl-Test`
-with snapshot `clean-agentcontrol-base`.
+Idempotent, run once on the host (elevated). Produces VM `agentcontrol-test-vm`
+with snapshot `clean-agentcontrol-base`. Provisioning is **host-side over
+PowerShell Direct** (VMBus, no guest network) — the MS image is already
+auto-logged-in as `User`, so there is no OOBE / AutoLogon / first-boot script /
+reboot-and-resume plumbing.
 
 | Step | Action | Notes |
 |---|---|---|
-| a | `Convert-WindowsImage -SourcePath win11-eval.iso -VHDFormat VHDX -DiskLayout UEFI -UnattendPath AutoUnattend.xml -SizeBytes 64GB` | Dynamic disk; 16 GB is the min *used*, cap 64 GB |
+| a | Resolve gallery entry → `disk.uri` + sha256; download `.zip` (cached), **verify sha256**, extract `.vhdx`, clear mark-of-the-web | Strip Microsoft's trailing commas before `ConvertFrom-Json` |
 | b | `New-VM -Generation 2 -MemoryStartupBytes 8GB -VHDPath ...` + `Set-VMProcessor -Count 4 -ExposeVirtualizationExtensions $true` | **Nested-virt flag — VM must be OFF to set it** |
-| c | `Set-VM -CheckpointType Standard` + `Set-VMMemory -DynamicMemoryEnabled $false` | Static RAM required for nested-virt |
-| d | First boot → AutoUnattend auto-logs-in test user, runs Windows Update, reboots | ~15–20 min unattended |
-| e | `wsl --install --no-launch` → reboot → `wsl --install -d Ubuntu-22.04 --no-launch` | Pre-provision distro; nested-virt makes WSL2 work inside guest |
-| f | Install **Windows OpenSSH Server** (`Add-WindowsCapability OpenSSH.Server`), start + auto-start service, drop authorized host pubkey | Key-based auth (§6) |
-| g | Enable registry **auto-login** for test user (`DefaultUserName`/`AutoAdminLogon`) | So WSL user-session/systemd is available |
-| h | `Checkpoint-VM -SnapshotName clean-agentcontrol-base` | The immutable golden state |
+| c | `Set-VMMemory -DynamicMemoryEnabled $false` + `Set-VM -CheckpointType Standard`; `Set-VMKeyProtector` + `Enable-VMTPM` | Static RAM for nested-virt; vTPM + Secure Boot |
+| d | Start; `New-PSSession -VMName ... -Credential User` (blank pw, `Passw0rd!` fallback) | PowerShell Direct — no network needed |
+| e | Over the session: `Add-WindowsCapability OpenSSH.Server`, start/auto-start, pubkey → `administrators_authorized_keys` (SYSTEM/Admins ACL) | Key-based auth (§6) |
+| f | Over the session: ensure `Ubuntu-22.04` (`wsl --install -d`, or offline `-UbuntuRootfsPath` import) + `dev` user + `wsl.conf` (systemd) | WSL2 already enabled on the image — one shot, no feature-reboot |
+| g | Over the session: `slmgr /rearm` (resets the expired eval clock) | Then reboot so it applies |
+| h | Reboot for rearm, clean shutdown, `Checkpoint-VM -SnapshotName clean-agentcontrol-base`, record imported hash | Golden state; hash → `Update-DevVM.ps1` |
 
-Connect the VM to an **Internal** vSwitch `AgentControl-Test` with a static guest
-IP (`172.31.0.10`, host `172.31.0.1`) — deterministic SSH target, no
-DHCP/NAT-port-forward guesswork. NAT is the fallback if isolation is needed.
+Attach the VM to the **Default Switch** (NAT + DHCP). The guest IP is therefore
+**dynamic** — the per-run orchestrator discovers it via
+`Get-VMNetworkAdapter` before staging (was a pinned static `172.31.0.10` on an
+Internal switch in the ISO design; reconcile in the orchestrator PR, see §6).
 
 ---
 
@@ -169,15 +183,23 @@ hyperv-test tree.
 
 ## 6. Migration plan — sub-PRs
 
-4 sub-PRs, mostly linear (66h.2 depends on 66h.1's VM existing; 66h.3 folds into
-.2; .4 documents). All docs/scripts — no product-code change.
+Mostly linear (the orchestrator depends on the base VM existing). All
+docs/scripts — no product-code change.
 
 | PR | Deliverable | Depends on |
 |---|---|---|
-| **66h.1** | `Build-BaseImage.ps1` + `AutoUnattend.xml` + one-time-setup doc | — (this BLUEPRINT) |
-| **66h.2** | `hyperv-test-orchestrator.sh` + `runner-vm.ps1` (lifts 66d steps) | 66h.1 |
+| **66h.1** | ~~`Build-BaseImage.ps1` + `AutoUnattend.xml`~~ — **superseded by 66j** | — |
+| **66j** | `Import-DevVM.ps1` + `Update-DevVM.ps1` (MS dev VM pivot); ISO flow deprecated to `Build-BaseImage-FromIso.ps1` | — (this BLUEPRINT) |
+| **66h.2** | `hyperv-test-orchestrator.sh` + `runner-vm.ps1` (lifts 66d steps) | 66j |
 | **66h.3** | Wire `verify-pair-flow.mjs` reuse + `pair-verify.env.example` + guest-path fixups | 66h.2 |
-| **66h.4** | `PHASE-66H-SUMMARY.md` + runbook (build-once, run-many) | 66h.1–.3 |
+| **66h.4** | `PHASE-66H-SUMMARY.md` + runbook (build-once, run-many) | 66j, 66h.2–.3 |
+
+**Orchestrator reconciliation for 66j** (was designed against the ISO base;
+update before 66h.2 ships): (1) SSH user is now **`User`** (MS dev VM admin), not
+`Administrator`/`test`; (2) guest IP is **DHCP on the Default Switch** — discover
+it with `Get-VMNetworkAdapter` (or pin an Internal switch + static IP inside
+`Import-DevVM.ps1` if determinism is preferred); (3) provisioning is
+PowerShell-Direct, so the orchestrator's SSH data-channel is unchanged.
 
 ---
 
@@ -185,12 +207,14 @@ hyperv-test tree.
 
 | # | Risk | Mitigation |
 |---|---|---|
-| 1 | **Win11 licensing for CI** — eval ISO is 90-day; re-arm or rebuild needed. Long-term CI wants a real license/key. | Rebuild base quarterly from fresh eval ISO, **or** user supplies a licensed key in AutoUnattend |
-| 2 | **SSH-into-Windows auth** — password is brittle/insecure. | **Key-based**: bake host pubkey into `administrators_authorized_keys` during base build (§2.2f) |
-| 3 | **Snapshot revert semantics** — standard checkpoints reset disk *and* memory; differencing-disk bloat over time. | Use **Standard** checkpoint (not Production/VSS) for exact state; `Stop-VM -TurnOff` each run so no runtime state accrues; periodically merge/rebuild |
-| 4 | **Nested-virt prerequisites** — needs Intel VT-x/AMD-V exposed, static RAM, VM off to set flag, host build supporting it. | `Build-BaseImage.ps1` asserts `(Get-VMProcessor).ExposeVirtualizationExtensions` + `DynamicMemoryEnabled=$false` before snapshot |
-| 5 | **~12 min/run + ~20 GB base VHDX storage** | Acceptable for a nightly/pre-release gate, not per-commit; single reusable base disk |
-| 6 | Internal-switch guest IP may drift if not pinned | AutoUnattend sets static `172.31.0.10`; orchestrator asserts reachability before staging |
+| 1 | **Win11 licensing** — the gallery dev VM is a 90-day Enterprise Eval and the current image (`WinDev2407`) is **already expired**. | `Import-DevVM.ps1` runs `slmgr /rearm` (+ reboot) so each reverted snapshot boots licensed; rearms are finite (~5) → `Update-DevVM.ps1` pulls a fresh image quarterly |
+| 2 | **Microsoft may pull the dev VM from the gallery entirely** (they already killed the standalone download). | The `-DiskUri/-DiskSha256/-ArchiveEntry` overrides let you pin a locally-cached zip; the deprecated `Build-BaseImage-FromIso.ps1` remains as an eval-ISO fallback |
+| 3 | **Stale build** — gallery image is 22H2/July-2024, not 25H2. | Acceptable for the WSL-inclusive install/pair test (WSL2 + OpenSSH behaviour, not OS-version-specific); revisit if a test needs 25H2, then use the ISO fallback with a licensed key |
+| 4 | **PowerShell Direct credentials** — MS default for `User` (blank vs `Passw0rd!`) can drift. | Script tries blank then `Passw0rd!`; `-GuestUser`/`-GuestPassword` override |
+| 5 | **SSH-into-Windows auth** — password is brittle/insecure. | **Key-based**: host pubkey → `administrators_authorized_keys` during provisioning (§2.2e) |
+| 6 | **Nested-virt prerequisites** — needs VT-x/AMD-V exposed, static RAM, VM off to set flag. | `Import-DevVM.ps1` sets `ExposeVirtualizationExtensions` + `DynamicMemoryEnabled=$false` while the VM is off, before start |
+| 7 | **Default-Switch guest IP is dynamic** | Orchestrator discovers it via `Get-VMNetworkAdapter` (§6 reconciliation); or pin an Internal switch + static IP |
+| 8 | **~10-20 GB image download + extracted VHDX storage** | One-time download, cached + hash-verified; single reusable base disk |
 
 ---
 
@@ -208,18 +232,18 @@ hyperv-test tree.
 
 | Item | Needed? | Why |
 |---|---|---|
-| **Windows 11 Enterprise eval ISO** | ✅ Yes (one-time download) | No ready-made VHDX exists; base build consumes the ISO |
-| Windows 11 **license key** | ⚠️ Optional | Only if avoiding the 90-day eval re-arm/rebuild cadence |
-| Pre-built base VHDX | ❌ No | `Build-BaseImage.ps1` produces it from the ISO |
-| SSH keypair | ❌ No (auto-generated) | Base build bakes in the host pubkey |
+| **Windows 11 dev VM image** | ❌ No (auto-downloaded) | `Import-DevVM.ps1` fetches it from the gallery `disk.uri` + verifies sha256 |
+| Windows 11 Enterprise eval ISO | ⚠️ Only for the deprecated ISO fallback | `Build-BaseImage-FromIso.ps1` consumes it; not needed for the dev VM path |
+| Windows 11 **license key** | ⚠️ Optional | Only if you want to avoid the eval `slmgr /rearm` cadence (ISO fallback) |
+| SSH keypair | ❌ No (uses existing host key) | Provisioning bakes in the host pubkey (`-HostPubKeyPath`) |
 | `pair-verify.env` (service_role) | ⚠️ Optional | Present → pair-flow step runs; absent → recorded `skip` (same as 66d) |
 
 ## Sources
 
 - [Enable nested virtualization (Hyper-V)](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/enable-nested-virtualization)
-- [Windows dev VM images discontinued](https://learn.microsoft.com/en-us/answers/questions/2259075/windows-developer-vm-or-images-where-are-they-now)
-- [Windows 11 Enterprise evaluation](https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise)
-- [Convert-WindowsImage + VM tools](https://deepwiki.com/MicrosoftDocs/Virtualization-Documentation/5.4-convert-windowsimage-and-vm-tools)
-- [AutoUnattend.xml for Windows 11](https://www.deploymentresearch.com/back-to-basics-using-an-autounattend-xml-file-to-automate-windows-11-setup-from-media/)
+- [PowerShell Direct (host → guest, no network)](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/powershell-direct)
+- [Standalone Windows dev VM download discontinued](https://learn.microsoft.com/en-us/answers/questions/2259075/windows-developer-vm-or-images-where-are-they-now)
+- Hyper-V Quick Create gallery manifest: `https://go.microsoft.com/fwlink/?linkid=851584`
+- [Windows 11 Enterprise evaluation (ISO fallback)](https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise)
 </content>
 </invoke>

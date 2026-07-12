@@ -5,10 +5,10 @@
   desktop into the golden base image: Windows OpenSSH server (key auth to the
   injected host pubkey), WSL2 kernel, a pre-imported Ubuntu-22.04, and a `dev`
   UNIX user with the same host pubkey. Writes C:\provisioning-complete.txt when
-  done so Build-BaseImage.ps1 (on the host) knows to snapshot.
+  done so Build-BaseImage-FromIso.ps1 (on the host) knows to snapshot.
 
   Idempotent: safe to re-run. Everything it needs was staged into
-  C:\provisioning by Build-BaseImage.ps1 (offline VHDX injection) --
+  C:\provisioning by Build-BaseImage-FromIso.ps1 (offline VHDX injection) --
   wsl_update_x64.msi, ubuntu-jammy.tar.gz, host_id.pub.
 
 .NOTES

@@ -1,5 +1,18 @@
 ﻿<#
 .SYNOPSIS
+  DEPRECATED (Phase 66j) -- superseded by Import-DevVM.ps1. Kept for reference.
+
+  This is the original ISO + AutoUnattend flow: it builds the base image from a
+  raw Windows 11 Enterprise 90-day evaluation ISO via Convert-WindowsImage and an
+  in-guest First-Boot.ps1. That path proved fragile (specialize errors, Win11
+  25H2 ignoring unattend AutoLogon, deprecated Skip*OOBE, WSL MSI 1603, reboot-
+  and-resume races). Phase 66j pivots to Microsoft's pre-built "Windows 11 dev
+  environment" gallery image, provisioned host-side over PowerShell Direct with
+  no OOBE/AutoLogon/reboot plumbing. USE Import-DevVM.ps1 instead; reach for this
+  only if you specifically need a from-ISO build (e.g. a licensed key + a
+  current 25H2 build the gallery image does not offer). See README.md.
+
+  ---- original synopsis ----
   ONE-TIME builder for the Phase 66h Hyper-V test VM. Turns a Windows 11
   Enterprise 90-day evaluation ISO into a ready-to-clone Hyper-V guest with
   WSL2 + Ubuntu-22.04 + OpenSSH pre-installed, then snapshots it as
