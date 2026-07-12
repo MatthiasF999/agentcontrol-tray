@@ -122,7 +122,7 @@ download; VM create + PowerShell Direct provisioning is a few minutes).
 | `-HostPubKeyPath` | `\\wsl$\Ubuntu\home\dev\.ssh\id_ed25519.pub` | Baked into guest (admin + `dev`). |
 | `-Distro` | `Ubuntu-22.04` | WSL distro provisioned in the guest. |
 | `-UbuntuRootfsPath` | *(empty → auto-download)* | Host rootfs tarball to `wsl --import`. Empty auto-downloads from `-UbuntuRootfsUrl` (cached in `-WorkDir`); set it to pin a pre-placed tarball on air-gapped hosts. |
-| `-UbuntuRootfsUrl` | *(cloud-images.ubuntu.com jammy)* | Source for the auto-download. Canonical's `ubuntu-jammy-wsl-amd64-wsl.rootfs.tar.gz`. |
+| `-UbuntuRootfsUrl` | *(cloud-images.ubuntu.com jammy)* | Source for the auto-download. Canonical's `ubuntu-jammy-wsl-amd64-ubuntu22.04lts.rootfs.tar.gz`. |
 | `-GuestUser` / `-GuestPassword` | `User` / *(auto)* | MS dev-VM logon. Password is tried blank then `Passw0rd!`; override if MS changed it. |
 | `-SkipRearm` | *(off)* | Skip `slmgr /rearm` + its reboot (e.g. a still-valid image). |
 | `-Force` | *(off)* | Rebuild even if zip/VHDX/VM/snapshot exist. |

@@ -63,7 +63,7 @@ param(
   # Canonical Ubuntu 22.04 (jammy) WSL rootfs, published by Canonical. Used to
   # auto-download when -UbuntuRootfsPath is empty so no in-guest store download
   # (`wsl --install -d`) is ever needed -- that path fails on the offline MS eval image.
-  [string]$UbuntuRootfsUrl = 'https://cloud-images.ubuntu.com/wsl/jammy/current/ubuntu-jammy-wsl-amd64-wsl.rootfs.tar.gz',
+  [string]$UbuntuRootfsUrl = 'https://cloud-images.ubuntu.com/wsl/jammy/current/ubuntu-jammy-wsl-amd64-ubuntu22.04lts.rootfs.tar.gz',
   [string]$DevPassword  = 'AgentControl!Test1',
   # MS dev VM auto-logon account. Its password has historically been blank; some
   # builds used 'Passw0rd!'. PowerShell Direct needs the guest credential, so we
