@@ -323,12 +323,21 @@ exit 1
   # Substitute the URL via explicit .Replace() (not PS string interpolation) to
   # keep the here-string literal in bash.
   $script = $script.Replace('__WSL_SH_URL__', $WslShUrl)
-  $r = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $script)
+  # Base64-encode the whole script, then decode+eval it in bash via a single-line
+  # wrapper. Passing a multi-line here-string directly to `wsl.exe -e bash -lc`
+  # mangles it at the argv/-lc boundary (newlines truncated -> "line N: syntax
+  # error: unexpected end of file"; see PR #72/#73). Base64 has no newlines or
+  # quotes, so it survives PS->wsl.exe argv passing intact. UTF8 (not Unicode)
+  # so bash sees ASCII-compatible bytes.
+  $bytes = [System.Text.Encoding]::UTF8.GetBytes($script)
+  $b64 = [Convert]::ToBase64String($bytes)
+  $wrapper = "echo $b64 | base64 -d | bash"
+  $r = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $wrapper)
   $shot = Save-Screenshot 'bridge-install-verify'
   if ($r.Code -ne 0) {
     throw "bridge install+verify failed ($($r.Code)):`n$($r.Text.Trim())"
   }
-  Add-Step 'install-and-verify-bridge' 'pass' 'wsl.sh + node dist/index.js listening on :3001 (single wsl session)' $shot
+  Add-Step 'install-and-verify-bridge' 'pass' 'wsl.sh + node dist/index.js listening on :3001 (single wsl session, base64-encoded)' $shot
 }
 
 function Step-VerifyPairFlow {
