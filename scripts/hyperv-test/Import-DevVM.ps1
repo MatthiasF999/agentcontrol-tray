@@ -301,6 +301,34 @@ function Connect-GuestSession {
   throw "could not open a PowerShell Direct session as '$GuestUser' within ${ProvisionTimeoutMin}min. If Microsoft changed the default credentials, pass -GuestUser/-GuestPassword."
 }
 
+# ---- 6a. post-rearm sshd invariant -----------------------------------------
+# sshd StartType drifts back to Manual (service Stopped) across the rearm reboot
+# on some WinDev/CBS baselines: Add-WindowsCapability finalizes the service on
+# first start, but a CBS post-install cleanup after the reboot resets the value
+# Set-Service wrote pre-reboot. Re-assert + verify here so a broken-sshd snapshot
+# HARD-FAILS the build instead of silently breaking every later test run.
+function Assert-GuestSshd {
+  param($Session)
+  Info 're-asserting sshd (Automatic + Running) after the rearm reboot ...'
+  Invoke-Command -Session $Session -ScriptBlock {
+    $ErrorActionPreference = 'Stop'
+    # Belt-and-suspenders: Set-Service and sc.exe write StartType through different
+    # code paths; some CBS cleanup resets one path but not the other.
+    Set-Service -Name sshd -StartupType Automatic
+    & sc.exe config sshd start= auto | Out-Null
+    Start-Service sshd -ErrorAction SilentlyContinue
+    $svc = Get-Service sshd
+    if ($svc.Status -ne 'Running' -or $svc.StartType -ne 'Automatic') {
+      throw "sshd drift after rearm reboot: Status=$($svc.Status) StartType=$($svc.StartType); expected Running/Automatic"
+    }
+    if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port 22 -InformationLevel Quiet)) {
+      throw 'sshd not accepting loopback connections on port 22 after rearm reboot'
+    }
+    Write-Host '[guest] sshd re-asserted post-rearm: Running + Automatic + port 22 open'
+  }
+  Info 'sshd verified: Automatic + Running + port 22 reachable'
+}
+
 # ---- 6. provision the guest over the session -------------------------------
 function Invoke-GuestProvisioning {
   param($Session)
@@ -388,6 +416,10 @@ function Complete-Base {
     Info 'restarting guest so the rearm takes effect ...'
     Restart-VM -Name $VmName -Force -Wait -For Heartbeat -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 20
+    # Re-open PS Direct post-reboot and re-assert sshd BEFORE the snapshot so the
+    # golden image can never ship with sshd Manual/Stopped (see Assert-GuestSshd).
+    $psds = Connect-GuestSession
+    try { Assert-GuestSshd -Session $psds } finally { Remove-PSSession $psds -ErrorAction SilentlyContinue }
   }
   Info 'shutting guest down cleanly ...'
   Stop-VM -Name $VmName -Force

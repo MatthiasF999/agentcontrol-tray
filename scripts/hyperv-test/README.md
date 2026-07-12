@@ -105,9 +105,11 @@ download; VM create + PowerShell Direct provisioning is a few minutes).
    ensure `Ubuntu-22.04` (the host auto-downloads Canonical's jammy WSL rootfs
    and the guest `wsl --import`s it — never a Store `wsl --install -d`), create
    the `dev` user, then `slmgr /rearm`.
-6. Reboot the guest so the rearm applies, shut down cleanly, take the
-   `clean-agentcontrol-base` snapshot, and record the imported image hash to
-   `devvm\imported-image.json`.
+6. Reboot the guest so the rearm applies, **re-assert + verify sshd
+   (Automatic + Running + port 22) after the reboot so the snapshot can never
+   ship with sshd drifted to Manual/Stopped (a build hard-fail, not a silent
+   test-run failure)**, shut down cleanly, take the `clean-agentcontrol-base`
+   snapshot, and record the imported image hash to `devvm\imported-image.json`.
 
 ### Key parameters (defaults)
 

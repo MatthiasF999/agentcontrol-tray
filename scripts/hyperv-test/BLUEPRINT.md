@@ -111,7 +111,7 @@ reboot-and-resume plumbing.
 | e | Over the session: `Add-WindowsCapability OpenSSH.Server`, start/auto-start, pubkey → `administrators_authorized_keys` (SYSTEM/Admins ACL) | Key-based auth (§6) |
 | f | Over the session: ensure `Ubuntu-22.04` (`wsl --install -d`, or offline `-UbuntuRootfsPath` import) + `dev` user + `wsl.conf` (systemd) | WSL2 already enabled on the image — one shot, no feature-reboot |
 | g | Over the session: `slmgr /rearm` (resets the expired eval clock) | Then reboot so it applies |
-| h | Reboot for rearm, clean shutdown, `Checkpoint-VM -SnapshotName clean-agentcontrol-base`, record imported hash | Golden state; hash → `Update-DevVM.ps1` |
+| h | Reboot for rearm, **re-assert + verify sshd (Automatic + Running + port 22) post-reboot (throws if drifted so a broken-sshd snapshot never ships)**, clean shutdown, `Checkpoint-VM -SnapshotName clean-agentcontrol-base`, record imported hash | Golden state; hash → `Update-DevVM.ps1` |
 
 Attach the VM to the **Default Switch** (NAT + DHCP). The guest IP is therefore
 **dynamic** — the per-run orchestrator discovers it via
