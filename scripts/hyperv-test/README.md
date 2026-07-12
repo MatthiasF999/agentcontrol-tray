@@ -45,8 +45,9 @@ script, no OOBE, no AutoLogon, no reboots. Setup drops from ~90 min to ~10-20 mi
 - **A host SSH keypair** — `\\wsl$\Ubuntu\home\dev\.ssh\id_ed25519.pub` by
   default (generate with `ssh-keygen -t ed25519` if absent). Its **public** key
   is baked into the guest for both the Windows admin and the Ubuntu `dev` user.
-- **Internet access** on the host — downloads the gallery image + (by default)
-  the Ubuntu distro inside the guest.
+- **Internet access** on the host — downloads the gallery image **and** the
+  Ubuntu WSL rootfs (both fetched host-side; the guest needs no network). For
+  air-gapped hosts, pre-place the rootfs — see `-UbuntuRootfsPath` below.
 
 ---
 
@@ -101,8 +102,9 @@ download; VM create + PowerShell Direct provisioning is a few minutes).
 5. Start it; the MS image auto-logs-in as `User` — so provisioning runs from the
    **host** over PowerShell Direct (`New-PSSession -VMName`), no guest network
    needed: install OpenSSH (key auth via `administrators_authorized_keys`),
-   ensure `Ubuntu-22.04` (via `wsl --install -d`, or an offline
-   `-UbuntuRootfsPath` import), create the `dev` user, then `slmgr /rearm`.
+   ensure `Ubuntu-22.04` (the host auto-downloads Canonical's jammy WSL rootfs
+   and the guest `wsl --import`s it — never a Store `wsl --install -d`), create
+   the `dev` user, then `slmgr /rearm`.
 6. Reboot the guest so the rearm applies, shut down cleanly, take the
    `clean-agentcontrol-base` snapshot, and record the imported image hash to
    `devvm\imported-image.json`.
@@ -119,7 +121,8 @@ download; VM create + PowerShell Direct provisioning is a few minutes).
 | `-DiskUri` / `-DiskSha256` / `-ArchiveEntry` | *(from gallery)* | Pin/override the image (offline / reproducible builds). |
 | `-HostPubKeyPath` | `\\wsl$\Ubuntu\home\dev\.ssh\id_ed25519.pub` | Baked into guest (admin + `dev`). |
 | `-Distro` | `Ubuntu-22.04` | WSL distro provisioned in the guest. |
-| `-UbuntuRootfsPath` | *(empty)* | Offline: a host rootfs tarball to `wsl --import` instead of `wsl --install -d`. |
+| `-UbuntuRootfsPath` | *(empty → auto-download)* | Host rootfs tarball to `wsl --import`. Empty auto-downloads from `-UbuntuRootfsUrl` (cached in `-WorkDir`); set it to pin a pre-placed tarball on air-gapped hosts. |
+| `-UbuntuRootfsUrl` | *(cloud-images.ubuntu.com jammy)* | Source for the auto-download. Canonical's `ubuntu-jammy-wsl-amd64-wsl.rootfs.tar.gz`. |
 | `-GuestUser` / `-GuestPassword` | `User` / *(auto)* | MS dev-VM logon. Password is tried blank then `Passw0rd!`; override if MS changed it. |
 | `-SkipRearm` | *(off)* | Skip `slmgr /rearm` + its reboot (e.g. a still-valid image). |
 | `-Force` | *(off)* | Rebuild even if zip/VHDX/VM/snapshot exist. |
@@ -157,7 +160,8 @@ pipeline as a scheduled quarterly job.
 | `could not open a PowerShell Direct session` | MS changed the default credentials. Pass `-GuestUser` / `-GuestPassword`. Confirm the guest booted (open it in Hyper-V Manager). |
 | PowerShell Direct rejects the blank-password `User` account (`The credential is invalid`) | Win11's default LSA policy `LimitBlankPasswordUse=1` blocks blank passwords for network-type logons (which PS Direct uses). `Prepare-WinDevVhdx` offline-mounts the VHDX and sets that policy to `0` before first boot, so re-running `Import-DevVM.ps1` fixes it automatically. See the [MS Learn LSA policy doc](https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/accounts-limit-local-account-use-of-blank-passwords-to-console-logon-only). |
 | PowerShell Direct waits forever (guest is up + logged in) | Guest Service Interface integration service disabled (imported WinDev VHDX defaults it off). Enable it via `Enable-VMIntegrationService -VMName <vm> -Name 'Guest Service Interface'`, or just re-run `Import-DevVM.ps1` (the fix enables it automatically). |
-| `wsl --install -d ... failed` | Guest had no NAT internet. Supply an offline rootfs with `-UbuntuRootfsPath <host tar.gz>`. |
+| `wsl --import ... failed` | The staged rootfs is corrupt/truncated. Delete `<WorkDir>\ubuntu-jammy-wsl.rootfs.tar.gz` and re-run (it re-downloads), or pass a known-good `-UbuntuRootfsPath`. |
+| Rootfs download fails / host is air-gapped | Pre-place a rootfs tarball and pass `-UbuntuRootfsPath <host tar.gz>` (skips the auto-download entirely). |
 | `slmgr /rearm` reports no rearms left | This image has been rearmed ~5 times — run `Update-DevVM.ps1` (or `Import-DevVM.ps1 -Force`) to pull a fresh image with a full rearm budget. |
 | WSL fails inside the guest | The **physical** host must expose VT-x/AMD-V and not itself block nested virt. |
 
