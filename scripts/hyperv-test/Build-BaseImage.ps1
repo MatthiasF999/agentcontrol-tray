@@ -136,7 +136,7 @@ function New-BaseVhdx {
   $hb = Start-Heartbeat 'converting ISO -> VHDX'
   try {
     Convert-WindowsImage -SourcePath $IsoPath -Edition $Edition `
-      -VHDPath $vhdxPath -VHDFormat VHDX -VHDType Dynamic -DiskLayout UEFI `
+      -VHDPath $vhdxPath -VHDFormat VHDX -DiskLayout UEFI `
       -SizeBytes ($DiskGB * 1GB) -UnattendPath $unattend -Verbose
   } finally { Stop-Heartbeat $hb }
   if (-not (Test-Path $vhdxPath)) { throw 'Convert-WindowsImage did not produce a VHDX' }
