@@ -201,19 +201,19 @@ nested-delegation fix teammate seeded with that context.
 
 ---
 
-## 7. Open questions (owner decision)
+## 7. Locked decisions (owner-confirmed — implementers' source of truth)
 
-1. **Dedicated box vs the user's multi-purpose machine?** The architecture assumes
-   a *dedicated* Windows host (R1). If none is available, a second-best is a
-   scheduled off-hours window on the shared box — but that reintroduces WSL
-   contention and loses "push → result." Owner: procure/allocate a box, or accept
-   off-hours-only CI?
-2. **Base-rebuild cadence — weekly vs aligned-to-90-day-expiry?** Weekly is safe
-   but spends ~90 min box-time each week. A ~monthly cadence with a 7-day
-   pre-expiry trigger may suffice. Which?
-3. **Secret model + notify channel?** GitHub App vs short-lived registration
-   token for the runner (R3); and email vs the existing bridge/Slack path for the
-   failure-only notification (§6). Both need one owner call before 66i.1/66i.5.
+These were the open questions; the owner has now **locked** them. Treat this
+section as authoritative for the 66i.1–66i.6 briefs — do not re-litigate.
+
+| # | Decision | Locked answer | Implementer impact |
+|---|---|---|---|
+| D1 | **Host** | **Multi-purpose machine now → dedicated box later.** Interim runs on the user's machine in dedicated off-hours time-slots; design so the switch to a dedicated box is a config change, not a rewrite | 66i.1: parameterize all host-specific bits (work dir, switch name, ISO path, **off-hours/time-slot guard**) via env-vars + document the dedicated-box cutover in `RUNNER-SETUP.md`. 66i.3: `hyperv-test.yml` carries an **off-hours concurrency window** for the shared-box interim so runs don't collide with the user's live WSL |
+| D2 | **Base-rebuild cadence** | **Monthly**, with a **60-day-before-90-day-eval-expiry** trigger. Weekly is overkill for infra that rarely changes | 66i.2: cron → monthly `schedule`. 66i.5: health monitor warns + triggers a rebuild when `base-manifest.json` eval-expiry is **< 60 days** out |
+| D3 | **Runner secret** | **GitHub App (short-lived registration token)** — no long-lived PAT | 66i.1: `Register-HyperVRunner.ps1` mints the registration token via the App, not a PAT (R3) |
+| D4 | **Notify channel** | **Email initially**; Slack is a follow-up once a workspace exists | 66i.4/66i.5: failure-only notification via email; leave a Slack seam but don't build it yet |
+
+Ready for the 66i.1 fan-out.
 
 ## Sources
 
