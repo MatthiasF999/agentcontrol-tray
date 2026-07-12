@@ -169,6 +169,60 @@ function Expand-Vhdx {
   Info "VHDX extracted: $vhdxPath"
 }
 
+# ---- 3b. offline VHDX prep: allow blank-password network logon -------------
+# MS's WinDev*Eval image ships auto-logon user 'User' with a blank, undocumented
+# password. PowerShell Direct authenticates over a network-logon type, and Win11's
+# default LSA policy LimitBlankPasswordUse=1 refuses blank passwords for anything
+# but console logon -- so PS Direct fails "The credential is invalid" regardless of
+# the password we try. Flipping the policy to 0 offline (before first boot) lets the
+# blank-password logon through. Ref: https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/accounts-limit-local-account-use-of-blank-passwords-to-console-logon-only
+function Prepare-WinDevVhdx {
+  param([Parameter(Mandatory)][string]$VhdxPath)
+  # Never touch a VHDX a running VM has open -- offline hive edits would corrupt it.
+  $attached = Get-VM | Where-Object { $_.State -eq 'Running' } |
+    Get-VMHardDiskDrive | Where-Object { $_.Path -eq $VhdxPath }
+  if ($attached) {
+    Warn "VHDX '$VhdxPath' is attached to a running VM; skipping blank-password policy fix"
+    return
+  }
+  $mount = Join-Path $env:TEMP "agentcontrol-vhdxmount-$([guid]::NewGuid().Guid)"
+  New-Item -ItemType Directory -Force -Path $mount | Out-Null
+  $hive = 'HKLM\_ACOffSys'
+  $vhd  = $null
+  try {
+    $vhd  = Mount-VHD -Path $VhdxPath -NoDriveLetter -Passthru
+    # The Windows volume is the largest Basic partition; the small EFI/MSR/recovery
+    # partitions are < 1GB, so filter those out and take the biggest that remains.
+    $part = Get-Partition -DiskNumber $vhd.DiskNumber |
+      Where-Object { $_.Type -eq 'Basic' -and $_.Size -gt 1GB } |
+      Sort-Object Size -Descending | Select-Object -First 1
+    if (-not $part) { throw "no Basic > 1GB (Windows) partition found on $VhdxPath" }
+    Add-PartitionAccessPath -DiskNumber $vhd.DiskNumber -PartitionNumber $part.PartitionNumber -AccessPath $mount
+    $systemHive = Join-Path $mount 'Windows\System32\config\SYSTEM'
+    if (-not (Test-Path $systemHive)) { throw "SYSTEM hive not found at $systemHive" }
+    & reg load $hive $systemHive | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "reg load SYSTEM hive failed ($LASTEXITCODE)" }
+    try {
+      $lsaKey = "$hive\ControlSet001\Control\Lsa"
+      $cur = & reg query $lsaKey /v LimitBlankPasswordUse 2>$null | Select-String 'LimitBlankPasswordUse'
+      if ($cur -match '0x0\b') {
+        Info 'blank-password network logon policy already disabled on VHDX (no-op)'
+      } else {
+        & reg add $lsaKey /v LimitBlankPasswordUse /t REG_DWORD /d 0 /f | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "reg add LimitBlankPasswordUse failed ($LASTEXITCODE)" }
+        Info 'blank-password network logon policy disabled on VHDX (WinDev workaround)'
+      }
+    } finally {
+      # Release .NET handles on the loaded hive before unloading, else reg unload fails.
+      [gc]::Collect(); Start-Sleep -Seconds 2
+      & reg unload $hive | Out-Null
+    }
+  } finally {
+    if ($vhd) { Dismount-VHD -Path $VhdxPath -ErrorAction SilentlyContinue }
+    Remove-Item -Path $mount -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}
+
 # ---- 4. create the VM ------------------------------------------------------
 function New-DevVm {
   if (Get-VM -Name $VmName -ErrorAction SilentlyContinue) {
@@ -347,6 +401,9 @@ $image = Resolve-GalleryImage
 $entry = if ($ArchiveEntry) { $ArchiveEntry } else { $image.Entry }
 $zip   = Get-DevVmZip -Image $image
 Expand-Vhdx -Zip $zip -Entry $entry
+# Offline-fix the LSA blank-password policy so PowerShell Direct can log the MS
+# dev image's blank-password 'User' account in (see Prepare-WinDevVhdx).
+Prepare-WinDevVhdx -VhdxPath $vhdxPath
 New-DevVm
 $session = Connect-GuestSession
 try { Invoke-GuestProvisioning -Session $session } finally { Remove-PSSession $session -ErrorAction SilentlyContinue }
