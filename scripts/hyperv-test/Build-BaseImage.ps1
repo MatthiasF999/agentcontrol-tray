@@ -19,7 +19,8 @@
   # @line-limit-exception: single linear one-time build pipeline; the step
   # functions read as one recipe and splitting them across modules would hide
   # the ordering that matters (nested-virt flag before start, dismount before
-  # New-VM, etc.).
+  # New-VM, etc.). Plus a small Start/Stop-Heartbeat pair keeping the 30-60min
+  # Convert-WindowsImage + first-boot polling phases visibly alive.
 #>
 [CmdletBinding()]
 param(
@@ -51,6 +52,24 @@ $converter = Join-Path $WorkDir 'Convert-WindowsImage.ps1'
 
 function Info  { param($m) Write-Host "[build] $m" -ForegroundColor Cyan }
 function Warn  { param($m) Write-Host "[build] $m" -ForegroundColor Yellow }
+
+# Live "elapsed mm:ss" heartbeat from a side thread so long silent native calls
+# don't look hung. -StreamingHost is load-bearing: without it the thread-job's
+# Write-Host is buffered until Receive-Job, i.e. not live.
+function Start-Heartbeat {
+  param([string]$Label)
+  if (-not (Get-Command Start-ThreadJob -ErrorAction SilentlyContinue)) {
+    Warn "Start-ThreadJob unavailable; '$Label' runs without a live heartbeat"; return $null
+  }
+  Start-ThreadJob -StreamingHost $Host -ArgumentList $Label -ScriptBlock {
+    param($l); $sw = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) { Start-Sleep -Seconds 30; Write-Host "[build] $l — elapsed $($sw.Elapsed.ToString('mm\:ss'))" -ForegroundColor DarkCyan }
+  }
+}
+function Stop-Heartbeat {
+  param($Job)
+  if ($Job) { $Job | Stop-Job -EA SilentlyContinue; $Job | Remove-Job -Force -EA SilentlyContinue }
+}
 
 # ---- 1. prereqs -------------------------------------------------------------
 function Test-Prereqs {
@@ -111,12 +130,16 @@ function New-BaseVhdx {
   Get-File $ConvertImageUrl $converter 'Convert-WindowsImage.ps1'
   . $converter   # dot-source to expose the Convert-WindowsImage function
   $unattend = Join-Path $scriptDir 'AutoUnattend.xml'
-  Info "converting ISO -> VHDX (edition '$Edition', ${DiskGB}GB dynamic UEFI) — several minutes ..."
-  Convert-WindowsImage -SourcePath $IsoPath -Edition $Edition `
-    -VHDPath $vhdxPath -VHDFormat VHDX -VHDType Dynamic -DiskLayout UEFI `
-    -SizeBytes ($DiskGB * 1GB) -UnattendPath $unattend
+  Info "converting ISO -> VHDX (edition '$Edition', ${DiskGB}GB dynamic UEFI) — 30-60 min; -Verbose + a 30s heartbeat prove it is alive ..."
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $hb = Start-Heartbeat 'converting ISO -> VHDX'
+  try {
+    Convert-WindowsImage -SourcePath $IsoPath -Edition $Edition `
+      -VHDPath $vhdxPath -VHDFormat VHDX -VHDType Dynamic -DiskLayout UEFI `
+      -SizeBytes ($DiskGB * 1GB) -UnattendPath $unattend -Verbose
+  } finally { Stop-Heartbeat $hb }
   if (-not (Test-Path $vhdxPath)) { throw 'Convert-WindowsImage did not produce a VHDX' }
-  Info "VHDX built: $vhdxPath"
+  Info "VHDX built: $vhdxPath in $($sw.Elapsed.ToString('mm\:ss'))"
 }
 
 function Copy-PayloadIntoVhdx {
@@ -169,9 +192,11 @@ function Wait-Provisioning {
   Info "starting VM; waiting up to ${ProvisioningTimeoutMin}min for provisioning ..."
   Start-VM -Name $VmName
   $deadline = (Get-Date).AddMinutes($ProvisioningTimeoutMin)
+  $sw = [Diagnostics.Stopwatch]::StartNew()
   $ip = $null
   do {
     Start-Sleep -Seconds 20
+    $elapsed = $sw.Elapsed.ToString('mm\:ss')
     if (-not $ip) {
       $ip = (Get-VMNetworkAdapter -VMName $VmName).IPAddresses |
         Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1
@@ -181,9 +206,10 @@ function Wait-Provisioning {
       $probe = ssh -o BatchMode=yes -o StrictHostKeyChecking=no `
         -o ConnectTimeout=5 "Administrator@$ip" `
         'if (Test-Path C:\provisioning-complete.txt) { "DONE" } elseif (Test-Path C:\provisioning-failed.txt) { "FAILED" } else { "WAIT" }' 2>$null
-      if ($probe -match 'DONE')   { Info 'provisioning complete'; return $ip }
+      if ($probe -match 'DONE')   { Info "provisioning complete (elapsed $elapsed)"; return $ip }
       if ($probe -match 'FAILED') { throw 'guest provisioning failed — see C:\provisioning\first-boot.log inside the VM' }
     }
+    Info "provisioning... elapsed $elapsed ($(if ($ip) { "guest $ip, installing/oobe" } else { 'waiting for guest IP' }))"
   } while ((Get-Date) -lt $deadline)
   throw "provisioning did not complete within ${ProvisioningTimeoutMin}min (SSH reachable=$([bool]$ip))"
 }
