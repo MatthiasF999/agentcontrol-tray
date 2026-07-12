@@ -30,3 +30,7 @@ src-tauri/shared/
 bootstrapper/*.exe
 bootstrapper/latest.json
 bootstrapper/dl/
+
+# e2e pair-flow verifier — never commit the service_role key
+scripts/e2e-pair-verify/.env
+scripts/sandbox-test/pair-verify.env

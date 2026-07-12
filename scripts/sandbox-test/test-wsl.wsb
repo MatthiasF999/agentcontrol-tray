@@ -1,0 +1,35 @@
+<Configuration>
+  <!--
+    Windows Sandbox config for the AgentControl WSL-inclusive test.
+    Rendered by host-orchestrator.sh (paths are substituted if you move the
+    host root). Unlike test.wsb this drives the FULL flow: WSL2 kernel +
+    Ubuntu-22.04 + the wsl.sh bridge installer, so it needs more RAM and
+    nested virtualization.
+
+      ProtectedClient=Disable  — required for nested Hyper-V (WSL2 needs a
+        nested hypervisor; ProtectedClient hardening blocks it). Only honoured
+        on Windows 11 24H2+. On older builds WSL2 will fail to start inside the
+        sandbox and the runner records step 'nested_virt_unsupported'.
+      MemoryInMB=8192          — WSL2 kernel + Ubuntu + bridge need headroom;
+        4096 (the tray-only test) is too tight and the kernel OOMs.
+  -->
+  <ProtectedClient>Disable</ProtectedClient>
+  <VGpu>Enable</VGpu>
+  <Networking>Enable</Networking>
+  <MemoryInMB>8192</MemoryInMB>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>C:\Users\Dev\AgentControlSandbox\staging</HostFolder>
+      <SandboxFolder>C:\Users\WDAGUtilityAccount\Desktop\staging</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>C:\Users\Dev\AgentControlSandbox\output</HostFolder>
+      <SandboxFolder>C:\Users\WDAGUtilityAccount\Desktop\output</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell.exe -ExecutionPolicy Bypass -NoProfile -File C:\Users\WDAGUtilityAccount\Desktop\staging\sandbox-runner-wsl.ps1</Command>
+  </LogonCommand>
+</Configuration>
