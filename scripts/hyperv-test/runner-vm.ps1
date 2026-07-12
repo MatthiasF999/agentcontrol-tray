@@ -282,51 +282,29 @@ function Step-WaitDistro {
 }
 
 function Step-InstallBridge {
-  # 1. Ensure systemd is enabled in the imported distro (fresh rootfs has no wsl.conf).
-  $ensureSystemd = @'
-set -e
-if ! grep -qxF 'systemd=true' /etc/wsl.conf 2>/dev/null; then
-  printf '[boot]\nsystemd=true\n' > /etc/wsl.conf
-  echo 'wsl.conf: systemd=true written'
-else
-  echo 'wsl.conf: systemd already enabled'
-fi
-'@
-  $r0 = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $ensureSystemd)
-  if ($r0.Code -ne 0) { throw "failed to write /etc/wsl.conf: $($r0.Text.Trim())" }
-
-  # 2. Terminate to force systemd boot on next launch.
-  Invoke-Wsl @('--terminate', $Distro) | Out-Null
-  Start-Sleep -Seconds 3
-
-  # 3. Prime: trigger boot + wait for systemd to be running.
-  $wait = "for i in `$(seq 1 30); do systemctl is-system-running 2>/dev/null | grep -qE 'running|degraded' && break; sleep 1; done; systemctl is-system-running || true"
-  Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $wait) | Out-Null
-
-  # 4. Enable-linger for root so systemctl --user works without a login session.
-  Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', 'loginctl enable-linger root') | Out-Null
-
-  # 5. Invoke wsl.sh with the user D-Bus env pre-set. wsl.sh's systemctl --user
-  #    call will now find the socket at /run/user/0/bus.
   # -u root bypasses the first-run NewUserPrompt; no default UNIX user exists yet.
-  $cmd = "export XDG_RUNTIME_DIR=/run/user/`$(id -u); export DBUS_SESSION_BUS_ADDRESS=unix:path=`$XDG_RUNTIME_DIR/bus; curl -sSL $WslShUrl | bash"
+  # wsl.sh is expected to fail at [7/7] under `wsl.exe -u root -e bash -lc` because
+  # `systemctl --user` needs an interactive user D-Bus session that a raw exec
+  # doesn't provide. That's a product-level concern with wsl.sh; here we fall
+  # back to launching the freshly-unpacked bridge directly and let
+  # Step-VerifyBridge's pgrep path confirm it. Both paths succeed as long as the
+  # process is live.
+  $cmd = "curl -sSL $WslShUrl | bash"
   $r = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $cmd)
   $shot = Save-Screenshot 'bridge-install'
-  if ($r.Code -ne 0) {
-    # Fallback: try starting the bridge manually so Step-VerifyBridge's pgrep-fallback picks it up.
-    $manualStart = @'
-set -e
-cd /root/agentcontrol-bridge
-nohup /usr/bin/env node dist/index.js > /var/log/agentcontrol-bridge.log 2>&1 &
-sleep 2
-pgrep -af agentcontrol-bridge >&2 || (echo "manual bridge start failed" >&2; exit 1)
-'@
-    $fb = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $manualStart)
-    if ($fb.Code -ne 0) { throw "wsl.sh bridge install failed ($($r.Code)) and manual-start fallback failed ($($fb.Code)): $($r.Text.Trim())`n---fallback---`n$($fb.Text.Trim())" }
-    Add-Step 'install-bridge' 'warn' 'wsl.sh systemctl --user failed; started bridge manually via nohup' $shot
+  if ($r.Code -eq 0) {
+    Add-Step 'install-bridge' 'pass' "curl $WslShUrl | bash (root)" $shot
     return
   }
-  Add-Step 'install-bridge' 'pass' "curl $WslShUrl | bash (root)" $shot
+  # Fallback: assume wsl.sh made it through [4/7] (bridge unpacked) or [5/7]
+  # (npm ci) before dying. Confirm bridge dir + dist entry exist, then launch.
+  # Single-line bash for reliable PS -> wsl.exe argv passing.
+  $manualCmd = 'test -f /root/agentcontrol-bridge/dist/index.js && (cd /root/agentcontrol-bridge && nohup /usr/bin/env node dist/index.js > /tmp/agentcontrol-bridge.log 2>&1 &) && sleep 2 && pgrep -af agentcontrol-bridge'
+  $fb = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', $manualCmd)
+  if ($fb.Code -ne 0) {
+    throw "wsl.sh bridge install failed ($($r.Code)) and manual-start fallback failed ($($fb.Code)): $($r.Text.Trim())`n---fallback---`n$($fb.Text.Trim())"
+  }
+  Add-Step 'install-bridge' 'warn' "wsl.sh non-zero; started bridge via nohup fallback (pid detected via pgrep)" $shot
 }
 
 function Step-VerifyBridge {
