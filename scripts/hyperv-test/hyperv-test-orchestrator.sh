@@ -10,8 +10,9 @@
 # host's own WSL session — the guest runs WSL2 via nested virtualization, so no
 # `wsl --shutdown` is ever needed. See scripts/hyperv-test/BLUEPRINT.md.
 #
-# Assumes Phase 66h.1's Build-BaseImage.ps1 has already produced the VM +
-# snapshot and baked ~/.ssh/id_ed25519's pubkey into the guest.
+# Assumes the base builder (Import-DevVM.ps1, Phase 66j; or the deprecated
+# Build-BaseImage-FromIso.ps1) has already produced the VM + snapshot and baked
+# ~/.ssh/id_ed25519's pubkey into the guest.
 #
 # Flows (mirror the 66d contract):
 #   --flow tray   installer download + install-dir verify + tray launch
@@ -72,7 +73,7 @@ VM_IP=''
 revert_snapshot() {
   log "reverting $VM_NAME -> snapshot $SNAPSHOT_NAME"
   ps "Restore-VMSnapshot -VMName '$VM_NAME' -Name '$SNAPSHOT_NAME' -Confirm:\$false" \
-    || fail "Restore-VMSnapshot failed (VM/snapshot missing? run Build-BaseImage.ps1 first)"
+    || fail "Restore-VMSnapshot failed (VM/snapshot missing? run Import-DevVM.ps1 first)"
 }
 
 start_vm() {

@@ -8,8 +8,8 @@
   Analog of 66d's sandbox-runner-wsl.ps1 + sandbox-runner.ps1, merged and
   adapted for a real VM: launched via SSH (not a Sandbox LogonCommand), so it
   does NOT Stop-Computer — the orchestrator does Stop-VM after collecting
-  output. Nested virt is baked into the base image and asserted by
-  Build-BaseImage.ps1, so this drops 66d's nested-virt detection apparatus.
+  output. Nested virt is baked into the base image and asserted by the base
+  builder (Import-DevVM.ps1), so this drops 66d's nested-virt detection apparatus.
 
   -Flow tray  installer run + install-dir verify + tray launch
   -Flow wsl   WSL2 kernel + Ubuntu-22.04 + wsl.sh bridge + verify-pair-flow
