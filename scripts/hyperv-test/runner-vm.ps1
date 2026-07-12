@@ -308,18 +308,28 @@ function Step-InstallBridge {
 }
 
 function Step-VerifyBridge {
-  $st = Invoke-Wsl @('-d', $Distro, '-e', 'systemctl', '--user', 'status', $BridgeUnit)
+  # Skip `systemctl --user` -- it's guaranteed to fail under `wsl.exe -u root -e
+  # bash -lc` (no interactive user D-Bus session; see PR #73 / BLUEPRINT). Poll
+  # pgrep for the bridge process, retrying to survive WSL2 auto-restart windows.
   $shot = Save-Screenshot 'bridge-status'
-  if ($st.Text -match 'active \(running\)') {
-    Add-Step 'verify-bridge' 'pass' 'systemctl --user: active (running)' $shot
+  $found = $false
+  $pgOut = ''
+  for ($i = 0; $i -lt 6; $i++) {
+    $pg = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', 'pgrep -af agentcontrol-bridge')
+    if ($pg.Code -eq 0 -and $pg.Text.Trim()) {
+      $found = $true
+      $pgOut = $pg.Text.Trim()
+      break
+    }
+    Start-Sleep -Seconds 5
+  }
+  if ($found) {
+    Add-Step 'verify-bridge' 'warn' "process live via pgrep: $pgOut" $shot
     return
   }
-  $pg = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', 'pgrep -af agentcontrol-bridge')
-  if ($pg.Code -eq 0 -and $pg.Text.Trim()) {
-    Add-Step 'verify-bridge' 'warn' "no --user unit, but process live: $($pg.Text.Trim())" $shot
-    return
-  }
-  throw "agentcontrol-bridge not active: $($st.Text.Trim())"
+  # Collect diagnostics for the throw
+  $logTail = Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'bash', '-lc', 'tail -80 /tmp/agentcontrol-bridge.log 2>/dev/null; echo "---journalctl---"; journalctl -n 40 -u agentcontrol-bridge --no-pager 2>/dev/null; echo "---dmesg tail---"; dmesg 2>/dev/null | tail -20')
+  throw "agentcontrol-bridge not running after 30s of retries. Diagnostics:`n$($logTail.Text.Trim())"
 }
 
 function Step-VerifyPairFlow {
