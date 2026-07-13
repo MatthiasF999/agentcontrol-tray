@@ -114,14 +114,16 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
-            // Phase 55.3.0 — forward `agentcontrol-tray://pair?…` deep
-            // links from the operator portal into the onboarding flow.
+            // Phase 55.3.0 — forward `agentcontrol-tray://pair?…` deep links
+            // from the operator portal into the onboarding flow, and
+            // `agentcontrol-tray://auth-callback#…` magic-link tokens into auth.
             #[cfg(desktop)]
             let _ = app.deep_link().register_all();
             let handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
                 for url in event.urls() {
                     commands::pair::emit_pair_tokens(&handle, &url);
+                    commands::pair::emit_auth_tokens(&handle, &url);
                 }
             });
 

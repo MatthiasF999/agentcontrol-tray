@@ -1,4 +1,5 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
+import { listen } from '@tauri-apps/api/event';
 import {
   createContext,
   type ReactNode,
@@ -24,6 +25,34 @@ interface AuthState {
 
 const AuthCtx = createContext<AuthState | null>(null);
 
+// Magic-link verify redirects to `agentcontrol-tray://auth-callback#…`; the
+// Rust deep-link handler forwards the tokens on the `auth-tokens-received`
+// event. Its own hook so the listener is live before the browser hands back.
+function useMagicLinkTokens(
+  client: SupabaseClient,
+  setSession: (session: Session) => void,
+  setStatus: (status: Status) => void,
+) {
+  useEffect(() => {
+    const unlisten = listen<{ access_token: string; refresh_token: string }>(
+      'auth-tokens-received',
+      async (event) => {
+        const { data, error } = await client.auth.setSession({
+          access_token: event.payload.access_token,
+          refresh_token: event.payload.refresh_token,
+        });
+        if (error === null && data.session !== null) {
+          setSession(data.session);
+          setStatus('signed-in');
+        }
+      },
+    );
+    return () => {
+      void unlisten.then((f) => f());
+    };
+  }, [client, setSession, setStatus]);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [session, setSessionState] = useState<Session | null>(null);
@@ -44,6 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     })();
   }, [client]);
+
+  useMagicLinkTokens(client, setSessionState, setStatus);
 
   const value = useMemo<AuthState>(
     () => ({
