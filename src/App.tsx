@@ -13,7 +13,6 @@ import {
 import { settings } from './lib/storage';
 import { getSupabase } from './lib/supabase';
 import {
-  bridgePairState,
   listenForPairTokens,
   restartBridgeService,
   writePairEnv,
@@ -118,33 +117,18 @@ function Router() {
   return <SignedInRouter />;
 }
 
-// Phase 55.3.0 — first-run gate. Before the bridge is set up (WSL +
-// Ubuntu + Node + Claude CLI + bridge service), route to the onboarding
-// flow folded in from the standalone installer. Once Done, persist the
-// flag and fall through to the normal auth + main UI.
+// Phase 55.3.0 — first-run gate. The visual OnboardingFlow always runs on
+// first launch (per profile); its individual steps auto-pass when their
+// preconditions are already met, so the user still sees progress without
+// clicking through steps that don't apply. The persisted flag is the sole
+// source of truth — it's set only when the wizard reaches `onComplete`, never
+// by a background probe. Once set, future launches skip to the auth + main UI.
 const SETUP_DONE_KEY = 'bridge.setup.done.v1';
 
 function useOnboardingGate() {
   const [done, setDone] = useState<boolean | null>(null);
   useEffect(() => {
     void settings.get<boolean>(SETUP_DONE_KEY).then((v) => setDone(v === true));
-    // Background probe — does NOT block the first paint. WSL cold-start
-    // for the `/pair` probe takes 5-30s and was blocking the entire
-    // tray window + icon from appearing in v0.3.6. Show whatever the
-    // persisted flag says immediately; if the probe later finds the
-    // bridge already paired, flip the flag in the background and the
-    // gate re-renders into the main UI.
-    void (async () => {
-      try {
-        const state = await bridgePairState();
-        if (state === 'paired') {
-          await settings.set(SETUP_DONE_KEY, true);
-          setDone(true);
-        }
-      } catch {
-        // Bridge unreachable — leave the persisted flag in charge.
-      }
-    })();
   }, []);
   const complete = useCallback(() => {
     void settings.set(SETUP_DONE_KEY, true);

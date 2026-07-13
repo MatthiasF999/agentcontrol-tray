@@ -132,6 +132,13 @@ async function bootstrap(ctx: PairCtx): Promise<void> {
   ctx.ui.setError(null);
   ctx.ui.setPhase('preparing');
   try {
+    // Bridge already paired (re-running the wizard against a bridge set up on
+    // a previous launch) — auto-pass this step instead of re-minting a claim
+    // code and re-prompting sign-in.
+    if ((await bridgePairState()) === 'paired') {
+      advance(ctx);
+      return;
+    }
     const code = await waitForClaimCode(ctx.distro);
     ctx.label = await getMachineLabel();
     ctx.ui.setLabel(ctx.label);
