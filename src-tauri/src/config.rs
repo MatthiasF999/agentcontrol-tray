@@ -46,4 +46,4 @@ pub fn supabase_functions_url() -> String {
 /// Long-lived public anon JWT — already shipped in every web bundle
 /// (role=anon, no privileges beyond what RLS allows). Embedded so the
 /// bridge can call `bridge-claim` on boot before any pairing exists.
-pub const SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgwMjcxNDM2LCJleHAiOjIwOTU2MzE0MzZ9.X6qsRCvwhSg-dAQVQd188B8YoE1fZPi8I07nDnmww2A";
+pub const SUPABASE_ANON_KEY: &str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4Mjc3MTAwMCwiZXhwIjo0OTM4NDQ0NjAwLCJyb2xlIjoiYW5vbiJ9.epxEJlR4mDrT10iYlWFbn6kZxATOPYBuWbgG09sVoeE";

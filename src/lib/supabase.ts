@@ -13,7 +13,7 @@ import { supabaseStorageAdapter } from './storage';
 // RLS does the load-bearing isolation server-side, the anon key only
 // grants the routes the user could already hit unauthenticated.
 const SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgwMjcxNDM2LCJleHAiOjIwOTU2MzE0MzZ9.X6qsRCvwhSg-dAQVQd188B8YoE1fZPi8I07nDnmww2A';
+  'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4Mjc3MTAwMCwiZXhwIjo0OTM4NDQ0NjAwLCJyb2xlIjoiYW5vbiJ9.epxEJlR4mDrT10iYlWFbn6kZxATOPYBuWbgG09sVoeE';
 
 let _client: SupabaseClient | null = null;
 
