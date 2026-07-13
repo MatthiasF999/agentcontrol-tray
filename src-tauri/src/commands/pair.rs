@@ -2,7 +2,7 @@ use super::shell::{env_upsert, run_in_wsl_capture, run_in_wsl_quiet};
 use crate::config;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_opener::OpenerExt;
-use url::Url;
+use url::{form_urlencoded, Url};
 
 const BRIDGE_DIR: &str = "$HOME/agentcontrol-bridge";
 const ADMIN_PAIR_URL: &str = "http://127.0.0.1:3001/admin/pair";
@@ -59,6 +59,48 @@ pub fn parse_pair_url(url: &Url) -> Option<PairTokens> {
 pub fn emit_pair_tokens(app: &AppHandle, url: &Url) {
     if let Some(tokens) = parse_pair_url(url) {
         let _ = app.emit("pair-tokens-received", tokens);
+    }
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct AuthTokens {
+    pub access_token: String,
+    pub refresh_token: String,
+}
+
+/// Pure parser for the `agentcontrol-tray://auth-callback#access_token=…&refresh_token=…`
+/// deep link GoTrue redirects to after verifying a magic link. Unlike the pair link the
+/// tokens live in the URL *fragment* (after `#`), so we form-decode `url.fragment()` —
+/// this percent-decodes values (e.g. base64 padding `=` arrives as `%3D`). Returns `None`
+/// for any non-callback URL or when either token is missing. Side-effect-free for testing.
+pub fn parse_auth_callback_url(url: &Url) -> Option<AuthTokens> {
+    if url.scheme() != "agentcontrol-tray" || url.host_str() != Some("auth-callback") {
+        return None;
+    }
+    let fragment = url.fragment()?;
+    let mut access_token = String::new();
+    let mut refresh_token = String::new();
+    for (key, value) in form_urlencoded::parse(fragment.as_bytes()) {
+        match key.as_ref() {
+            "access_token" => access_token = value.into_owned(),
+            "refresh_token" => refresh_token = value.into_owned(),
+            _ => {}
+        }
+    }
+    if access_token.is_empty() || refresh_token.is_empty() {
+        return None;
+    }
+    Some(AuthTokens {
+        access_token,
+        refresh_token,
+    })
+}
+
+/// Parse `agentcontrol-tray://auth-callback#...` deep links and forward the
+/// session tokens to the frontend via the `auth-tokens-received` event.
+pub fn emit_auth_tokens(app: &AppHandle, url: &Url) {
+    if let Some(tokens) = parse_auth_callback_url(url) {
+        let _ = app.emit("auth-tokens-received", tokens);
     }
 }
 
@@ -188,5 +230,51 @@ mod tests {
         assert!(parse_pair_url(&url("agentcontrol-tray://pair?bridge_id=b&org_id=o")).is_none());
         assert!(parse_pair_url(&url("agentcontrol-tray://pair?refresh_token=rt&org_id=o")).is_none());
         assert!(parse_pair_url(&url("agentcontrol-tray://pair?refresh_token=rt&bridge_id=b")).is_none());
+    }
+
+    #[test]
+    fn parses_auth_callback_tokens_from_fragment() {
+        let tokens = parse_auth_callback_url(&url(
+            "agentcontrol-tray://auth-callback#access_token=jwt.abc&refresh_token=rt123&expires_at=1&token_type=bearer",
+        ))
+        .expect("should parse");
+        assert_eq!(tokens.access_token, "jwt.abc");
+        assert_eq!(tokens.refresh_token, "rt123");
+    }
+
+    #[test]
+    fn auth_callback_percent_decodes_fragment_values() {
+        let tokens = parse_auth_callback_url(&url(
+            "agentcontrol-tray://auth-callback#access_token=a%3Db&refresh_token=c%2Fd",
+        ))
+        .expect("should parse");
+        assert_eq!(tokens.access_token, "a=b");
+        assert_eq!(tokens.refresh_token, "c/d");
+    }
+
+    #[test]
+    fn auth_callback_rejects_pair_url() {
+        assert!(parse_auth_callback_url(&url(
+            "agentcontrol-tray://pair?refresh_token=rt&bridge_id=b&org_id=o"
+        ))
+        .is_none());
+    }
+
+    #[test]
+    fn auth_callback_rejects_missing_fragment_fields() {
+        assert!(
+            parse_auth_callback_url(&url("agentcontrol-tray://auth-callback")).is_none(),
+            "no fragment"
+        );
+        assert!(
+            parse_auth_callback_url(&url("agentcontrol-tray://auth-callback#access_token=jwt"))
+                .is_none(),
+            "missing refresh_token"
+        );
+        assert!(
+            parse_auth_callback_url(&url("agentcontrol-tray://auth-callback#refresh_token=rt"))
+                .is_none(),
+            "missing access_token"
+        );
     }
 }
