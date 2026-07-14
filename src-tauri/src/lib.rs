@@ -135,10 +135,19 @@ pub fn run() {
             // handlers can both query / restart.
             let supervisor: Arc<BridgeSupervisor> = Arc::new(BridgeSupervisor::new());
             app.manage(supervisor.clone());
-            match supervisor.start() {
-                Ok(()) => eprintln!("[tray] bridge service started"),
-                Err(err) => eprintln!("[tray] bridge service start failed: {err}"),
-            }
+            // `start()` shells out to `wsl systemctl --user start`, which on a
+            // cold WSL distro can block 20-30s on first launch. Running it
+            // inline here would stall the setup callback and delay the whole
+            // webview init → black screen. Spawn it off the main thread so
+            // setup() returns immediately and the webview boots in parallel.
+            let start_supervisor = supervisor.clone();
+            tauri::async_runtime::spawn(async move {
+                match tauri::async_runtime::spawn_blocking(move || start_supervisor.start()).await {
+                    Ok(Ok(())) => eprintln!("[tray] bridge service started"),
+                    Ok(Err(err)) => eprintln!("[tray] bridge service start failed: {err}"),
+                    Err(err) => eprintln!("[tray] bridge start task panicked: {err}"),
+                }
+            });
 
             let show_item = MenuItem::with_id(app, "show", "Open AgentControl", true, None::<&str>)?;
             let restart_item =
