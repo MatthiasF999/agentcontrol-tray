@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { registerDeepLinkAuth } from './auth/deepLinkHandler';
@@ -174,9 +175,19 @@ function useGlobalPairListener(onPaired: () => void) {
   }, [onPaired]);
 }
 
+// The main window boots hidden (`visible: false`) so the OS never paints a
+// black native frame during WebView2's cold start. Once React has mounted —
+// meaning the brand background is painted — reveal it. Idempotent + non-fatal.
+function useRevealOnMount(): void {
+  useEffect(() => {
+    void invoke('show_main_window').catch(() => {});
+  }, []);
+}
+
 export default function App() {
   const { done, complete } = useOnboardingGate();
   useGlobalPairListener(complete);
+  useRevealOnMount();
 
   if (done === null) {
     return (
