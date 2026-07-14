@@ -1,6 +1,6 @@
 [package]
 name = "agentcontrol-tray"
-version = "0.7.4"
+version = "0.7.5"
 description = "AgentControl Bridge tray app — desktop UI for daemon pairing, status, and settings"
 authors = ["AgentControl"]
 edition = "2021"

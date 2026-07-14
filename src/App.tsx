@@ -123,7 +123,7 @@ function Router() {
 // clicking through steps that don't apply. The persisted flag is the sole
 // source of truth — it's set only when the wizard reaches `onComplete`, never
 // by a background probe. Once set, future launches skip to the auth + main UI.
-const SETUP_DONE_KEY = 'bridge.setup.done.v1';
+const SETUP_DONE_KEY = 'bridge.setup.done.v2';
 
 function useOnboardingGate() {
   const [done, setDone] = useState<boolean | null>(null);
