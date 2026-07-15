@@ -80,6 +80,8 @@ XPStyle off            ; classic controls so PBM_SET*COLOR is honored
 !define HTCAPTION_       2
 !define SW_MINIMIZE_     6
 !define VK_LBUTTON_      1
+!define VK_MENU_         0x12   ; Alt
+!define VK_F4_           0x73
 
 !ifndef PBM_SETRANGE32
   !define PBM_SETRANGE32  0x406
@@ -265,6 +267,24 @@ FunctionEnd
 ; without a WndProc subclass (see header). Uses screen-coordinate hit-tests
 ; against the live control rects, so it stays correct after PlaceButtons.
 Function UiTick
+  ; --- native close (Alt+F4) belt-and-suspenders ---
+  ; The caption is stripped so there is no system X, and a live WndProc
+  ; subclass is deliberately avoided (see header). Poll Alt+F4 through the same
+  ; GetAsyncKeyState timer path the click logic already relies on, so a
+  ; keyboard close quits cleanly in every phase the window is up. (WM_CLOSE
+  ; from the taskbar thumbnail menu still needs a subclass and is intentionally
+  ; out of scope here — it is unverifiable on the Linux CI that builds this.)
+  System::Call 'user32::GetAsyncKeyState(i ${VK_MENU_})i.r0'
+  IntOp $0 $0 & 0x8000
+  System::Call 'user32::GetAsyncKeyState(i ${VK_F4_})i.r1'
+  IntOp $1 $1 & 0x8000
+  ${If} $0 != 0
+  ${AndIf} $1 != 0
+    ${NSD_KillTimer} UiTick
+    ${NSD_KillTimer} BootTick
+    Quit
+  ${EndIf}
+
   ; --- cursor position (screen coords) -> $6,$7 ---
   System::Call '*(i,i)p.r5'
   System::Call 'user32::GetCursorPos(p r5)'
@@ -410,13 +430,24 @@ FunctionEnd
 ; Hand off to the real signed installer, silently, then exit. The Tauri
 ; POSTINSTALL hook launches the tray + onboarding, so no further UI here.
 ; A bootstrapper invoked with /S stays silent through the whole chain.
+;
+; Fire-and-forget (Exec, not ExecWait): the child runs silent (/S) and owns
+; every bit of the remaining UX, so the bootstrapper has no post-hand-off job
+; and must NOT block. ExecWait blocked the NSIS thread for the whole silent
+; install while UiTick was already killed above -> the window froze at
+; "Starting installer..." with a dead custom X, killable only via Task Manager
+; (the reported bug). The child exit code was captured into $0 but never read,
+; so waiting bought no error handling either. Exec returns once the child image
+; is mapped (the loader locks the .exe), so the running installer survives this
+; process's $PLUGINSDIR cleanup on Quit; the Tauri installer extracts to its
+; own temp dir and needs nothing further from ours.
 Function RunChild
   ${NSD_KillTimer} UiTick
   ${If} $ChildExe == ""
     MessageBox MB_ICONSTOP|MB_OK "Internal error: installer path missing."
     Quit
   ${EndIf}
-  ExecWait '"$ChildExe" /S' $0
+  Exec '"$ChildExe" /S'
   Quit
 FunctionEnd
 
