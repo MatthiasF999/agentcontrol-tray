@@ -97,3 +97,47 @@ fn decode(bytes: &[u8]) -> String {
         String::from_utf8_lossy(bytes).into_owned()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn utf16le(s: &str) -> Vec<u8> {
+        s.encode_utf16().flat_map(|u| u.to_le_bytes()).collect()
+    }
+
+    #[test]
+    fn decode_utf16le_wsl_output() {
+        // wsl.exe emits UTF-16LE; verify null-byte detection routes here.
+        let bytes = utf16le("Ubuntu\r\nDebian\r\n");
+        assert_eq!(decode(&bytes), "Ubuntu\r\nDebian\r\n");
+    }
+
+    #[test]
+    fn decode_plain_utf8_passthrough() {
+        assert_eq!(decode(b"Ubuntu-24.04\n"), "Ubuntu-24.04\n");
+    }
+
+    #[test]
+    fn list_distros_style_trimming() {
+        // Mimics list_distros() post-processing on decoded UTF-16LE.
+        let decoded = decode(&utf16le("Ubuntu\r\nUbuntu-24.04\r\n\r\n"));
+        let names: Vec<String> = decoded
+            .lines()
+            .map(|l| l.trim().trim_end_matches('\r').to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        assert_eq!(names, vec!["Ubuntu", "Ubuntu-24.04"]);
+    }
+
+    #[test]
+    fn parse_default_distro_from_status() {
+        let status = "Default Distribution: Ubuntu\nDefault Version: 2\n";
+        assert_eq!(parse_default_distro(status).as_deref(), Some("Ubuntu"));
+    }
+
+    #[test]
+    fn parse_default_distro_absent() {
+        assert_eq!(parse_default_distro("WSL version: 2.0\nKernel: 5.15\n"), None);
+    }
+}

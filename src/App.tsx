@@ -14,6 +14,7 @@ import {
 import { settings } from './lib/storage';
 import { getSupabase } from './lib/supabase';
 import {
+  detectUbuntu,
   listenForPairTokens,
   restartBridgeService,
   writePairEnv,
@@ -142,6 +143,28 @@ function useOnboardingGate() {
 // the global pair-tokens listener can write the env without re-asking.
 const DISTRO_KEY = 'bridge.distro.v1';
 
+// Resolve the WSL distro the bridge lives in. Onboarding caches its chosen
+// distro under DISTRO_KEY, but a deep-link can arrive on a host that never
+// ran the tray's wizard (bridge installed by wsl.sh directly), leaving the
+// key unset. Falling back to a hardcoded `Ubuntu-22.04` mis-targets the many
+// hosts whose default distro is named `Ubuntu` / `Ubuntu-24.04` / `Debian`,
+// so probe WSL for the real default before the literal last resort.
+async function resolveDistro(): Promise<string> {
+  const cached = await settings.get<string>(DISTRO_KEY);
+  if (cached && cached.trim()) return cached.trim();
+  try {
+    const detected = await detectUbuntu();
+    if (detected && detected.trim()) {
+      const name = detected.trim();
+      await settings.set(DISTRO_KEY, name);
+      return name;
+    }
+  } catch (err) {
+    console.warn('[pair] distro detection failed', err);
+  }
+  return 'Ubuntu-22.04';
+}
+
 /**
  * Global pair-tokens listener. Mounted at App-level so a deep-link from
  * the `app.<host>/pair-bridge` page reaches the tray regardless
@@ -153,7 +176,7 @@ function useGlobalPairListener(onPaired: () => void) {
   useEffect(() => {
     let mounted = true;
     const unlisten = listenForPairTokens(async (tokens) => {
-      const distro = (await settings.get<string>(DISTRO_KEY)) ?? 'Ubuntu-22.04';
+      const distro = await resolveDistro();
       try {
         await writePairEnv(
           distro,
