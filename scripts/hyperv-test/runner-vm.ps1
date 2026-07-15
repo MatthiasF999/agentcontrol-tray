@@ -429,6 +429,45 @@ node verify-pair-flow-signup.mjs
   }
 }
 
+function Step-VerifyDeepLinkForward {
+  # Windows single-instance URL forwarding (v0.7.7 / PR #85 regression guard).
+  # Windows delivers a custom-scheme invocation by spawning a NEW handler process
+  # with the URL as argv[1]; Tauri's single-instance plugin re-routes it to the
+  # already-running instance. Before v0.7.7 the callback ignored those args, so
+  # the URL was dropped and the tray hung forever on "Waiting for sign-in". Here
+  # we invoke the installed exe with a agentcontrol-tray://pair?... URL while the
+  # tray is already running (Step-LaunchTray, full flow): the callback must
+  # forward it to emit_pair_tokens -> useGlobalPairListener -> writePairEnv,
+  # which lands the tokens in the bridge's /root/agentcontrol-bridge/.env.
+  $dir = $result.installDir
+  if ([string]::IsNullOrEmpty($dir)) { $dir = Get-InstalledDir }
+  $exePath = if ($dir) { Join-Path $dir $TrayExeName } else { $null }
+  if (-not $exePath -or -not (Test-Path $exePath)) {
+    Add-Step 'verify-deeplink-forward' 'skip' "tray exe not found (dir: $dir)" (Save-Screenshot 'deeplink-noexe')
+    return
+  }
+  $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+  $rand = -join ((48..57 + 65..90 | ForEach-Object { [char]$_ }) | Get-Random -Count 8)
+  $sentinel = "E2E-DL-$stamp-$rand"
+  $testUrl = "agentcontrol-tray://pair?refresh_token=$sentinel&bridge_id=E2E-BID-$stamp&org_id=$([Guid]::NewGuid())&lan_api_key=E2E-LAK-$sentinel"
+  Start-Process -FilePath $exePath -ArgumentList $testUrl -PassThru | Out-Null
+
+  $deadline = (Get-Date).AddSeconds(20)
+  $found = $false
+  do {
+    Start-Sleep -Seconds 2
+    $envText = (Invoke-Wsl @('-d', $Distro, '-u', 'root', '-e', 'cat', '/root/agentcontrol-bridge/.env')).Text
+    if ($envText -match [regex]::Escape($sentinel)) { $found = $true; break }
+  } while ((Get-Date) -lt $deadline)
+
+  $shot = Save-Screenshot 'deeplink-forward'
+  if (-not $found) {
+    Add-Step 'verify-deeplink-forward' 'fail' "single-instance URL forward failed: sentinel '$sentinel' absent from /root/agentcontrol-bridge/.env after 20s" $shot
+    throw 'verify-deeplink-forward failed'
+  }
+  Add-Step 'verify-deeplink-forward' 'pass' 'exe+URL arg -> single-instance forward -> writePairEnv wrote sentinel to bridge .env' $shot
+}
+
 function Invoke-TrayFlow {
   Step-VerifySetup; Step-Launch; Step-DriveWizard
   Step-LaunchTray -Dir (Step-WaitInstalled)
@@ -437,6 +476,7 @@ function Invoke-TrayFlow {
 function Invoke-WslFlow {
   Step-VerifyHost; Step-UpdateWsl; Step-ImportDistro; Step-WaitDistro
   Step-InstallAndVerifyBridge; Step-VerifyPairFlow; Step-VerifyPairFlowSpa
+  Step-VerifyDeepLinkForward
 }
 
 # ---- run --------------------------------------------------------------------
