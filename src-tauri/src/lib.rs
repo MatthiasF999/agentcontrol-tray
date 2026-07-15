@@ -13,6 +13,7 @@ use tauri::{
     Emitter, Manager, WindowEvent,
 };
 use tauri_plugin_deep_link::DeepLinkExt;
+use url::Url;
 
 const TRAY_ID: &str = "agentcontrol-main";
 
@@ -93,10 +94,21 @@ pub fn run() {
 
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(win) = app.get_webview_window("main") {
                 let _ = win.show();
                 let _ = win.set_focus();
+            }
+            // Windows delivers custom-scheme URL invocations by launching a new
+            // process with the URL as an arg, which single-instance routes here
+            // — NOT via `on_open_url` (that fires only for first-launch args).
+            // Forward every parseable URL to both deep-link emitters (pair +
+            // auth-callback) so the tokens still reach the frontend.
+            for arg in args.iter().skip(1) {
+                if let Ok(url) = Url::parse(arg) {
+                    commands::pair::emit_pair_tokens(app, &url);
+                    commands::pair::emit_auth_tokens(app, &url);
+                }
             }
         }));
     }
