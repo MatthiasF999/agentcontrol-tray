@@ -1,4 +1,4 @@
-use super::shell::{env_upsert, run_in_wsl_capture, run_in_wsl_quiet};
+use super::shell::{env_upsert, run_in_wsl_quiet, run_in_wsl_script};
 use crate::config;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_opener::OpenerExt;
@@ -112,6 +112,11 @@ pub fn emit_auth_tokens(app: &AppHandle, url: &Url) {
 /// so tokens containing shell metacharacters can't break out of the command.
 /// `curl -w` appends the HTTP status so a non-2xx (e.g. binding mismatch) is
 /// surfaced as an `Err` for the wizard's retry path.
+///
+/// The script carries nested quotes (`-H "Authorization: Bearer $KEY"`,
+/// `printf '%s' "$RESP"`) that get mangled crossing the Windows → wsl.exe
+/// boundary as a raw `bash -c "…"`, so it's dispatched through
+/// [`run_in_wsl_script`], which base64-encodes it — zero quotes reach wsl.exe.
 #[tauri::command]
 pub async fn push_pair_to_bridge(
     distro: String,
@@ -140,7 +145,7 @@ pub async fn push_pair_to_bridge(
          rm -f .acpair.json; \
          printf '%s' \"$RESP\""
     );
-    let out = run_in_wsl_capture(&distro, &script).await?;
+    let out = run_in_wsl_script(&distro, &script).await?;
     let (body, code) = out
         .rsplit_once("__HTTP__")
         .ok_or_else(|| format!("bridge /admin/pair unreachable: {out}"))?;

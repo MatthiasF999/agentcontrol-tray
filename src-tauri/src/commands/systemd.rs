@@ -1,5 +1,6 @@
-use super::shell::{run_in_wsl, run_in_wsl_quiet, CommandResult};
+use super::shell::{run_in_wsl, run_in_wsl_args, run_in_wsl_quiet, CommandResult};
 use tauri::AppHandle;
+use tokio::time::{sleep, Duration};
 
 const SERVICE_UNIT: &str = r#"[Unit]
 Description=AgentControl Bridge
@@ -51,13 +52,31 @@ pub async fn install_systemd_service(
 #[tauri::command]
 pub async fn restart_bridge_service(distro: String) -> Result<(), String> {
     run_in_wsl_quiet(&distro, "systemctl --user restart agentcontrol-bridge").await?;
-    let probe = "sleep 3; for _ in $(seq 1 15); do \
-                 code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3001/health || true); \
-                 if [ \"$code\" = \"200\" ]; then exit 0; fi; sleep 2; done; exit 1";
-    let result = run_in_wsl_quiet(&distro, probe).await?;
-    if result.exit_code == 0 {
-        Ok(())
-    } else {
-        Err("bridge did not report healthy within 30s after restart".to_string())
+    // Poll `/health` in Rust with a direct-args curl. The previous inline bash
+    // probe used `-w '%{http_code}'` and `[ "$code" = "200" ]`; those nested
+    // quotes get mangled crossing the Windows → wsl.exe boundary, so the probe
+    // returned empty and the restart falsely reported unhealthy. `%{http_code}`
+    // passed as a literal curl arg (no shell) is quote-free and survives intact.
+    sleep(Duration::from_secs(3)).await;
+    for _ in 0..15 {
+        let code = run_in_wsl_args(
+            &distro,
+            &[
+                "curl",
+                "-s",
+                "-o",
+                "/dev/null",
+                "-w",
+                "%{http_code}",
+                "http://127.0.0.1:3001/health",
+            ],
+        )
+        .await
+        .unwrap_or_default();
+        if code == "200" {
+            return Ok(());
+        }
+        sleep(Duration::from_secs(2)).await;
     }
+    Err("bridge did not report healthy within 30s after restart".to_string())
 }
