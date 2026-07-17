@@ -282,7 +282,8 @@ Function UiTick
   ${AndIf} $1 != 0
     ${NSD_KillTimer} UiTick
     ${NSD_KillTimer} BootTick
-    Quit
+    SendMessage $HWNDPARENT ${WM_CLOSE} 0 0
+    Return                                            ; WM_CLOSE posts, doesn't halt; stop the callback like Quit did
   ${EndIf}
 
   ; --- cursor position (screen coords) -> $6,$7 ---
@@ -332,7 +333,7 @@ Function UiTick
   ${If} $HotClose == 1
     ${NSD_KillTimer} UiTick
     ${NSD_KillTimer} BootTick
-    Quit
+    SendMessage $HWNDPARENT ${WM_CLOSE} 0 0
   ${ElseIf} $HotMin == 1
     System::Call 'user32::ShowWindow(p $HWNDPARENT, i ${SW_MINIMIZE_})'
   ${Else}
@@ -420,7 +421,8 @@ Function BootTick
     ${NSD_SetText} $LblStatus "Failed: $1"
     MessageBox MB_ICONSTOP|MB_RETRYCANCEL "AgentControl could not be installed.$\n$\n$1" IDRETRY retry
     ${NSD_KillTimer} UiTick
-    Quit
+    SendMessage $HWNDPARENT ${WM_CLOSE} 0 0
+    Return                                            ; else falls through into retry: -> StartWorker on cancel
     retry:
       Call StartWorker
   ${EndIf}
@@ -445,10 +447,11 @@ Function RunChild
   ${NSD_KillTimer} UiTick
   ${If} $ChildExe == ""
     MessageBox MB_ICONSTOP|MB_OK "Internal error: installer path missing."
-    Quit
+    SendMessage $HWNDPARENT ${WM_CLOSE} 0 0
+    Return                                            ; else falls through into Exec of the empty path
   ${EndIf}
   Exec '"$ChildExe" /S'
-  Quit
+  SendMessage $HWNDPARENT ${WM_CLOSE} 0 0
 FunctionEnd
 
 ; Read a whole single-line file (worker writes them without trailing newline)
