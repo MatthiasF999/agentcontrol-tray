@@ -1,3 +1,4 @@
+use base64::Engine as _;
 use serde::Serialize;
 use std::process::Stdio;
 use tauri::{AppHandle, Emitter};
@@ -138,6 +139,45 @@ pub(crate) async fn run_in_wsl_capture(distro: &str, command: &str) -> Result<St
         .await
         .map_err(|e| format!("failed to spawn wsl: {e}"))?;
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Run `wsl -d <distro> -- <arg0> <arg1> …`, passing each argument STRAIGHT to
+/// the target program with **no** intervening `bash -c`, and return trimmed
+/// stdout.
+///
+/// This exists to dodge a wsl.exe bug on Windows: when Rust's
+/// `std::process::Command` builds the wsl.exe command line for
+/// `bash -c "<pipeline>"` and the pipeline contains nested quotes
+/// (`grep -oE '"state"…'`, `-w '%{http_code}'`), the double-quotes get mangled
+/// in the Windows → wsl.exe → bash argument translation, so the pipeline breaks
+/// and returns EMPTY. Empirically: an arg-array `bash -c` probe returns nothing,
+/// while `wsl -d <distro> -- curl …` (direct args, no shell) returns the full
+/// JSON. So we hand curl its args directly and parse the response in Rust.
+///
+/// Only use this for commands whose args are quote/metacharacter-free (the local
+/// HTTP probes qualify). For genuine shell pipelines use [`run_in_wsl_script`].
+pub(crate) async fn run_in_wsl_args(distro: &str, args: &[&str]) -> Result<String, String> {
+    let mut wsl = wsl_command();
+    wsl.args(["-d", distro, "--"]);
+    wsl.args(args);
+    let output = wsl
+        .output()
+        .await
+        .map_err(|e| format!("failed to spawn wsl: {e}"))?;
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Run an arbitrary bash `script` inside the distro without letting any of its
+/// shell metacharacters (quotes, `$`, `{}`, …) cross the Windows → wsl.exe
+/// boundary: the script is base64-encoded here and decoded + piped to bash on
+/// the Linux side, so the only bytes wsl.exe sees are
+/// `echo <base64> | base64 -d | bash` — all quote-free. Use for genuine
+/// multi-stage pipelines that can't be reduced to direct curl args (e.g. a
+/// heredoc + POST). Returns trimmed stdout.
+pub(crate) async fn run_in_wsl_script(distro: &str, script: &str) -> Result<String, String> {
+    let b64 = base64::engine::general_purpose::STANDARD.encode(script.as_bytes());
+    let wrapped = format!("echo {b64} | base64 -d | bash");
+    run_in_wsl_capture(distro, &wrapped).await
 }
 
 /// Run `wsl <args...>` on the host (not inside a distro), e.g. `wsl --install`.

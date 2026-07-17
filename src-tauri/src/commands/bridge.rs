@@ -1,7 +1,12 @@
-use super::shell::{run_in_wsl, run_in_wsl_capture, CommandResult};
+use super::shell::{run_in_wsl, run_in_wsl_args, CommandResult};
 use crate::config;
 use tauri::AppHandle;
 use tokio::time::{sleep, Duration};
+
+/// Local bridge `/pair` endpoint. Probed with a DIRECT-args curl (no `bash -c`)
+/// so no shell quoting crosses the Windows → wsl.exe boundary; the JSON body is
+/// parsed in Rust below.
+const PAIR_URL: &str = "http://127.0.0.1:3001/pair";
 
 // Bridge tarball is served from the `install.<host>` subdomain.
 // The bridge repo is private, so GitHub's `archive/refs/heads/main.tar.gz`
@@ -61,15 +66,19 @@ pub async fn bridge_pair_state() -> Result<String, String> {
     let Some(distro) = super::ubuntu::detect_ubuntu() else {
         return Ok("unreachable".to_string());
     };
-    let probe = "curl -fsS http://127.0.0.1:3001/pair 2>/dev/null | \
-                 grep -oE '\"state\"[[:space:]]*:[[:space:]]*\"[a-z]+\"' | \
-                 grep -oE '\"[a-z]+\"$' | tr -d '\"' | tail -1";
-    let out = run_in_wsl_capture(&distro, probe).await?;
-    Ok(if out.is_empty() {
-        "unreachable".to_string()
-    } else {
-        out
-    })
+    // Direct-args curl: `wsl -d <distro> -- curl -fsS <url>` — the args go
+    // straight to curl, so there is zero shell quoting for wsl.exe to mangle.
+    // On connection-refused / non-2xx, `-fsS` yields empty stdout → parse fails
+    // → "unreachable" (the desired "bridge not up yet" signal).
+    let json = run_in_wsl_args(&distro, &["curl", "-fsS", PAIR_URL]).await?;
+    Ok(parse_pair_state(&json).unwrap_or_else(|| "unreachable".to_string()))
+}
+
+/// Extract the `state` field ("paired" / "unpaired" / "expired" / …) from a
+/// `/pair` JSON body. Returns `None` when the body is empty or unparseable.
+fn parse_pair_state(json: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(json).ok()?;
+    Some(value.get("state")?.as_str()?.to_string())
 }
 
 /// Ask the running bridge for its current pairing claim code via the local
@@ -90,15 +99,80 @@ pub async fn bridge_pair_state() -> Result<String, String> {
 /// journal grep, no rate-limit cascade.
 #[tauri::command]
 pub async fn wait_for_claim_code(distro: String) -> Result<String, String> {
-    let probe = "curl -fsS http://127.0.0.1:3001/pair 2>/dev/null | \
-                 grep -oE '\"code\"[[:space:]]*:[[:space:]]*\"[A-Z0-9]{4}-[A-Z0-9]{4}\"' | \
-                 grep -oE '[A-Z0-9]{4}-[A-Z0-9]{4}' | tail -1";
     for _ in 0..30 {
-        let out = run_in_wsl_capture(&distro, probe).await?;
-        if !out.is_empty() {
-            return Ok(out);
+        // Direct-args curl (see `bridge_pair_state`); parse the claim code in Rust.
+        let json = run_in_wsl_args(&distro, &["curl", "-fsS", PAIR_URL]).await?;
+        if let Some(code) = parse_claim_code(&json) {
+            return Ok(code);
         }
         sleep(Duration::from_secs(1)).await;
     }
     Err("bridge did not expose a claim code on /pair within 30s".to_string())
+}
+
+/// Extract a well-formed `AAAA-BBBB` claim code from a `/pair` JSON body's
+/// `code` field. Returns `None` when the body is unparseable, the field is
+/// missing/null (bridge already paired), or the value isn't the expected shape.
+fn parse_claim_code(json: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(json).ok()?;
+    let code = value.get("code")?.as_str()?;
+    is_claim_code(code).then(|| code.to_string())
+}
+
+/// A claim code is exactly `XXXX-XXXX` with uppercase-alphanumeric groups.
+fn is_claim_code(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 9
+        && bytes.iter().enumerate().all(|(i, &c)| {
+            if i == 4 {
+                c == b'-'
+            } else {
+                c.is_ascii_uppercase() || c.is_ascii_digit()
+            }
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_state_from_paired_body() {
+        let json = r#"{"state":"paired","bridgeId":"b-1","orgId":"o-1"}"#;
+        assert_eq!(parse_pair_state(json).as_deref(), Some("paired"));
+    }
+
+    #[test]
+    fn parses_state_from_unpaired_body() {
+        let json = r#"{"state":"unpaired","code":"AB12-CD34","expiresAt":123}"#;
+        assert_eq!(parse_pair_state(json).as_deref(), Some("unpaired"));
+    }
+
+    #[test]
+    fn pair_state_none_on_empty_or_garbage() {
+        assert_eq!(parse_pair_state(""), None);
+        assert_eq!(parse_pair_state("not json"), None);
+        assert_eq!(parse_pair_state(r#"{"other":1}"#), None);
+    }
+
+    #[test]
+    fn parses_claim_code_from_unpaired_body() {
+        let json = r#"{"state":"unpaired","code":"AB12-CD34","expiresAt":123}"#;
+        assert_eq!(parse_claim_code(json).as_deref(), Some("AB12-CD34"));
+    }
+
+    #[test]
+    fn claim_code_none_when_paired_has_no_code() {
+        let json = r#"{"state":"paired","bridgeId":"b-1","orgId":"o-1"}"#;
+        assert_eq!(parse_claim_code(json), None);
+    }
+
+    #[test]
+    fn claim_code_rejects_malformed_values() {
+        assert_eq!(parse_claim_code(r#"{"code":"ab12-cd34"}"#), None, "lowercase");
+        assert_eq!(parse_claim_code(r#"{"code":"AB12CD34"}"#), None, "no dash");
+        assert_eq!(parse_claim_code(r#"{"code":"AB1-CD34"}"#), None, "wrong length");
+        assert_eq!(parse_claim_code(r#"{"code":null}"#), None, "null code");
+        assert_eq!(parse_claim_code(""), None, "empty body");
+    }
 }
