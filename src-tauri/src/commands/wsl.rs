@@ -1,4 +1,4 @@
-use super::shell::{run_wsl_host, CommandResult};
+use super::shell::{decode, run_wsl_host, CommandResult};
 use serde::Serialize;
 use std::process::Command;
 #[cfg(target_os = "windows")]
@@ -82,20 +82,6 @@ fn parse_default_distro(status_text: &str) -> Option<String> {
             .map(|(_, v)| v.trim().to_string())
             .filter(|v| !v.is_empty())
     })
-}
-
-/// wsl.exe writes UTF-16LE on Windows; fall back to UTF-8 elsewhere.
-fn decode(bytes: &[u8]) -> String {
-    let has_nuls = bytes.iter().take(64).any(|&b| b == 0);
-    if has_nuls && bytes.len() >= 2 {
-        let units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|c| u16::from_le_bytes([c[0], c[1]]))
-            .collect();
-        String::from_utf16_lossy(&units)
-    } else {
-        String::from_utf8_lossy(bytes).into_owned()
-    }
 }
 
 #[cfg(test)]

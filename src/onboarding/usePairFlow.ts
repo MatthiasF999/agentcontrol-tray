@@ -19,6 +19,13 @@ const DEEP_LINK_TIMEOUT_MS = 60_000;
 const FALLBACK_POLL_MS = 5_000;
 const FALLBACK_DEADLINE_MS = 5 * 60_000;
 
+// v0.7.12 — how long `bootstrap` waits for the bridge to answer /pair at all
+// before committing to the fresh-install branch. Covers the tray-wins-the-race
+// window after a reboot / a fresh install (measured: bridge unit became active
+// ~24s after tray start).
+const READY_POLL_MS = 1_000;
+const READY_DEADLINE_MS = 60_000;
+
 export type PairPhase =
   | 'preparing'
   | 'waiting'
@@ -128,17 +135,53 @@ function startFallbackPoll(ctx: PairCtx): void {
   scheduleFallbackTick(ctx, Date.now() + FALLBACK_DEADLINE_MS);
 }
 
+/** Sleep on a ctx-tracked timer, so unmount/retry cancels the pending wait. */
+function delay(ctx: PairCtx, ms: number): Promise<void> {
+  return new Promise((resolve) => later(ctx, resolve, ms));
+}
+
+/**
+ * Poll `/pair` until the bridge answers *at all*, then report which branch
+ * bootstrap should take.
+ *
+ * The tray can autostart after a reboot — or launch straight after install —
+ * before the bridge's `systemd --user` unit is listening. A one-shot probe then
+ * reads 'unreachable', which is indistinguishable from 'unpaired' at the branch
+ * point, so the flow fell through to `waitForClaimCode`. But the bridge comes up
+ * ALREADY PAIRED, and a paired `/pair` body has no `code` field — so that wait
+ * could only ever run out its 30s and dead-end with the browser never opening.
+ *
+ * Waiting for reachability first makes the branch decision on the bridge's real
+ * state. Past the deadline we fall through to the claim-code path anyway, which
+ * preserves the previous behaviour for a bridge that is genuinely down.
+ */
+async function resolveInitialState(
+  ctx: PairCtx,
+): Promise<'paired' | 'unpaired'> {
+  const deadline = Date.now() + READY_DEADLINE_MS;
+  while (!ctx.settled) {
+    const state = await bridgePairState().catch(() => 'unreachable');
+    if (state === 'paired') return 'paired';
+    if (state !== 'unreachable') return 'unpaired';
+    if (Date.now() >= deadline) return 'unpaired';
+    await delay(ctx, READY_POLL_MS);
+  }
+  return 'unpaired';
+}
+
 async function bootstrap(ctx: PairCtx): Promise<void> {
   ctx.ui.setError(null);
   ctx.ui.setPhase('preparing');
   try {
     // Bridge already paired (re-running the wizard against a bridge set up on
-    // a previous launch) — auto-pass this step instead of re-minting a claim
-    // code and re-prompting sign-in.
-    if ((await bridgePairState()) === 'paired') {
+    // a previous launch, or one that finished booting mid-wait) — auto-pass
+    // this step instead of re-minting a claim code and re-prompting sign-in.
+    if ((await resolveInitialState(ctx)) === 'paired') {
       advance(ctx);
       return;
     }
+    // Tokens can land via the deep-link listener while we were waiting.
+    if (ctx.settled) return;
     const code = await waitForClaimCode(ctx.distro);
     ctx.label = await getMachineLabel();
     ctx.ui.setLabel(ctx.label);

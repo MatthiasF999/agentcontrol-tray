@@ -13,6 +13,30 @@ use tokio::process::Command;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+/// Decode bytes captured from a `wsl.exe` child process.
+///
+/// wsl.exe writes UTF-16LE on Windows (UTF-8 elsewhere). A blind
+/// `String::from_utf8_lossy` does not flag that — 0x00 is valid UTF-8 — so it
+/// silently yields `{\0"\0s\0…`, which every downstream
+/// `serde_json::from_str` / `grep` then rejects. Nul bytes in the head of the
+/// buffer are the UTF-16 tell; without them this is a pure `from_utf8_lossy`
+/// passthrough, so clean UTF-8 payloads are unaffected.
+///
+/// Single source of truth for every wsl stdout reader in this module and in
+/// `wsl.rs`.
+pub(crate) fn decode(bytes: &[u8]) -> String {
+    let has_nuls = bytes.iter().take(64).any(|&b| b == 0);
+    if has_nuls && bytes.len() >= 2 {
+        let units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
+}
+
 fn wsl_command() -> Command {
     let cmd = Command::new("wsl");
     #[cfg(target_os = "windows")]
@@ -138,7 +162,7 @@ pub(crate) async fn run_in_wsl_capture(distro: &str, command: &str) -> Result<St
         .output()
         .await
         .map_err(|e| format!("failed to spawn wsl: {e}"))?;
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    Ok(decode(&output.stdout).trim().to_string())
 }
 
 /// Run `wsl -d <distro> -- <arg0> <arg1> …`, passing each argument STRAIGHT to
@@ -164,7 +188,7 @@ pub(crate) async fn run_in_wsl_args(distro: &str, args: &[&str]) -> Result<Strin
         .output()
         .await
         .map_err(|e| format!("failed to spawn wsl: {e}"))?;
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    Ok(decode(&output.stdout).trim().to_string())
 }
 
 /// Run an arbitrary bash `script` inside the distro without letting any of its

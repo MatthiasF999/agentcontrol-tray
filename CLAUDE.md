@@ -36,9 +36,14 @@ Rust shell. Analog to Tailscale's daemon-host tray.
   `pnpm build` (which is `tsc && vite build`).
 - **Rust check**: `cd src-tauri && cargo check` for the Rust side; full
   build via `cargo build --release` (or via `pnpm tauri build`).
-- **No test runner wired yet** (Phase 27/28 spike — tests deferred).
-  Treat `pnpm check` (= `pnpm lint && pnpm tsc --noEmit`) plus
-  `cargo check` as the smoke gate.
+- **Frontend tests**: `pnpm test` — Vitest + jsdom +
+  `@testing-library/react` (`vitest.config.ts`; suites live next to the
+  code as `src/**/*.test.ts`). Wired in v0.7.12; coverage starts at the
+  onboarding pair flow and grows as regressions land, so treat a new
+  `*.test.ts` as part of any behavioural fix. Note `ci.yml` does not run
+  it yet — that job is still `lint` + `build`.
+- **Smoke gate**: `pnpm check` (= `pnpm lint && pnpm tsc --noEmit &&
+  pnpm test`) plus `cargo test` / `cargo check` on the Rust side.
 - **Linter / formatter (TS side)**: Biome 2.4 (`biome.json`) +
   `scripts/check-line-limits.mjs`. Run via `pnpm lint`; auto-fix safe
   issues with `pnpm lint:fix`; format-only with `pnpm format`. Rust
