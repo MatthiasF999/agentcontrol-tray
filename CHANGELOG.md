@@ -14,7 +14,32 @@ when releases ship through the operator-portal.
 
 ## [Unreleased]
 
+### Fixed
+- v0.7.12 — **onboarding no longer dead-ends when the bridge is slow to
+  start.** `usePairFlow`'s `bootstrap()` branched on a single
+  `bridgePairState()` probe, so a tray that autostarted ahead of the
+  bridge's `systemd --user` unit (measured on a reboot: tray at
+  09:25:48, bridge active at 09:26:12) read `unreachable` and took the
+  fresh-install path. The bridge then came up **already paired**, and a
+  paired `GET /pair` body carries no `code` — so `waitForClaimCode`
+  could only run out its 30s and fail with "bridge did not expose a
+  claim code on /pair within 30s", with the browser never opening.
+  `bootstrap()` now polls for reachability first (1s interval, 60s
+  deadline) and branches on the bridge's real state; past the deadline
+  it falls through to the claim-code path exactly as before.
+- v0.7.12 — **wsl stdout decoded consistently.** `run_in_wsl_capture` /
+  `run_in_wsl_args` decoded with a blind `String::from_utf8_lossy`,
+  which keeps the interleaved nuls of wsl.exe's UTF-16LE output (0x00 is
+  valid UTF-8) and hands `serde_json` a body it rejects. `wsl.rs`'s
+  nul-sniffing `decode` is now a shared `shell::decode` that both
+  primitives route through.
+
 ### Added
+- v0.7.12 — **frontend test runner** (the Phase 37 ci.yml follow-up):
+  Vitest + jsdom + `@testing-library/react` via `vitest.config.ts`,
+  `pnpm test`, and `pnpm check` extended to run it. First suite is
+  `src/onboarding/usePairFlow.test.ts`, which pins the bridge-readiness
+  race above.
 - Phase 63 — **Windows bootstrapper.** A tiny (~106 KB) version-stable
   `setup.exe` served at one fixed URL
   (`https://install.agent-control.io/setup.exe`) always installs the

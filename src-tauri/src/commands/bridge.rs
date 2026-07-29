@@ -156,6 +156,25 @@ mod tests {
     }
 
     #[test]
+    fn parses_state_from_utf16le_pair_body() {
+        // wsl.exe emits UTF-16LE on Windows. `run_in_wsl_args` used to decode
+        // its stdout with a blind `from_utf8_lossy`, which keeps every
+        // interleaved nul (0x00 is valid UTF-8) and so hands serde_json a body
+        // it rejects -> "unreachable" even for a paired bridge. Route it
+        // through the shared `shell::decode` instead.
+        let bytes: Vec<u8> = r#"{"state":"paired","bridgeId":"b-1"}"#
+            .encode_utf16()
+            .flat_map(|u| u.to_le_bytes())
+            .collect();
+        let lossy = String::from_utf8_lossy(&bytes);
+        assert!(lossy.contains('\0'), "blind utf8 decode keeps the nuls");
+        assert_eq!(parse_pair_state(&lossy), None, "…and serde_json rejects it");
+
+        let decoded = crate::commands::shell::decode(&bytes);
+        assert_eq!(parse_pair_state(&decoded).as_deref(), Some("paired"));
+    }
+
+    #[test]
     fn parses_claim_code_from_unpaired_body() {
         let json = r#"{"state":"unpaired","code":"AB12-CD34","expiresAt":123}"#;
         assert_eq!(parse_claim_code(json).as_deref(), Some("AB12-CD34"));
