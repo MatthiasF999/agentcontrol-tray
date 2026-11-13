@@ -14,6 +14,11 @@ when releases ship through the operator-portal.
 
 ## [Unreleased]
 
+### Changed
+- Bootstrapper deploy (`build-release.yml`) runs on the release runner
+  `ac-deploy` (dedicated user with its own deploy key and a job-started
+  allowlist) instead of the operator account's `wsl2-tray` runner.
+
 ### Fixed
 - v0.7.12 — **onboarding no longer dead-ends when the bridge is slow to
   start.** `usePairFlow`'s `bootstrap()` branched on a single
