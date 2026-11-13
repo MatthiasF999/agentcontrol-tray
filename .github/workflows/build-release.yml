@@ -210,11 +210,11 @@ jobs:
   #
   # Phase 3 (bootstrapper-deploy-selfhosted) — split into build + deploy.
   # The build stays on a hosted runner for reproducibility; the deploy moves
-  # to the `wsl2-tray` self-hosted runner because Hetzner's Cloud Firewall
-  # blocks GH-hosted runner egress IPs (every hosted scp hit "Connection
-  # timed out"). The self-hosted runner reaches the box over the operator's
-  # Tailnet via the `hetzner-supabase` SSH alias, so no deploy key secret is
-  # needed. Artifacts are handed off build -> deploy via upload/download.
+  # to the self-hosted release runner (label `ac-deploy`) because Hetzner's
+  # Cloud Firewall blocks GH-hosted runner egress IPs (every hosted scp hit
+  # "Connection timed out"). The release runner reaches the box over the
+  # operator's Tailnet via the `hetzner-supabase` SSH alias, so no deploy key
+  # secret is needed. Artifacts are handed off build -> deploy via upload/download.
   bootstrapper-build:
     name: Bootstrapper build (setup.exe + latest.json)
     needs: build
@@ -281,17 +281,19 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # Deploy step lives on the self-hosted `wsl2-tray` runner so scp to the
+  # Deploy step lives on the self-hosted release runner (user ac-deploy on
+  # station-1-wsl, label ac-deploy only, no default labels) so scp to the
   # Hetzner install host succeeds over the operator's Tailnet (hosted runner
-  # IPs are firewall-blocked). No secrets: the runner host already holds the
-  # `hetzner-supabase` SSH alias + key in its own ~/.ssh/config.
+  # IPs are firewall-blocked). No secrets: ac-deploy holds its own deploy key
+  # and the `hetzner-supabase` SSH alias. A job-started hook admits only this
+  # job, only from v* tags or main - this public repo's PR jobs never reach it.
   bootstrapper-deploy:
     name: Bootstrapper deploy (install.agent-control.io)
     needs: bootstrapper-build
     if: >-
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '')
-    runs-on: self-hosted
+    runs-on: ac-deploy
     permissions:
       contents: read
     steps:
