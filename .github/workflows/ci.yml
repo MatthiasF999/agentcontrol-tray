@@ -15,9 +15,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# GitHub-hosted on purpose: this repository is public, so PR jobs (incl. from forks) must never
+# run on a self-hosted machine. Public repos get GitHub-hosted minutes for free.
 jobs:
   release-gates:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,7 +49,7 @@ jobs:
           fi
 
   lint-build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -68,7 +70,7 @@ jobs:
   # `docs/PHASE-*-SUMMARY.md`, `CLAUDE.md`, or `CHANGELOG.md`.
   doc-set-gate:
     if: github.event_name == 'pull_request'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:

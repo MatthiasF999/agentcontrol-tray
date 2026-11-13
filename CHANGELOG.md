@@ -18,6 +18,9 @@ when releases ship through the operator-portal.
 - Bootstrapper deploy (`build-release.yml`) runs on the release runner
   `ac-deploy` (dedicated user with its own deploy key and a job-started
   allowlist) instead of the operator account's `wsl2-tray` runner.
+- `ci.yml` (release gates, lint/build, doc-set gate) runs on GitHub-hosted
+  `ubuntu-latest` instead of the self-hosted `wsl2-tray` runner: this repo is
+  public, PR code must not run on the operator's machine.
 
 ### Fixed
 - v0.7.12 — **onboarding no longer dead-ends when the bridge is slow to
